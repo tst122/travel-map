@@ -139,9 +139,9 @@ el.addEventListener('click', () => {
       matched = true;
       const coordinates = marker.getLngLat();
       map.flyTo({ center: coordinates, zoom: 12, speed: 0.8 });
-      setTimeout(() => {
+      map.once('moveend', () => {
         marker.togglePopup();
-      }, 800);
+      });
     }
   });
 });
