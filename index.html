@@ -73,15 +73,11 @@
         el.className = 'marker';
 
         el.addEventListener('click', () => {
-          if (markerData.popup) {
-            new mapboxgl.Popup()
-              .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
-              .setHTML(markerData.popup)
-              .addTo(map);
-          } else if (markerData.link) {
-            window.open(markerData.link, '_blank');
-          }
-        });
+  new mapboxgl.Popup()
+    .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
+    .setHTML(markerData.popup || `<strong>${markerData.name}</strong>`)
+    .addTo(map);
+});
 
         const marker = new mapboxgl.Marker(el)
           .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
@@ -120,3 +116,4 @@
 </script>
 </body>
 </html>
+
