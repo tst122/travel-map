@@ -8,7 +8,7 @@
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
   <style>
     body { margin: 0; padding: 0; }
-    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    #map { position: absolute; top: 40px; bottom: 0; width: 100%; }
     .marker {
       background-color: #ff5a5f;
       width: 16px;
@@ -16,9 +16,27 @@
       border-radius: 50%;
       cursor: pointer;
     }
+    #search-container {
+      position: absolute;
+      top: 5px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1;
+      background: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    #search-box {
+      padding: 5px;
+      width: 250px;
+    }
   </style>
 </head>
 <body>
+<div id="search-container">
+  <input type="text" id="search-box" placeholder="Search locations...">
+</div>
 <div id="map"></div>
 
 <script>
@@ -27,7 +45,7 @@
   const map = new mapboxgl.Map({
     container: 'map',
     style: 'mapbox://styles/sicko5/cm6k1juil010301qm2krq7o84',
-    center: [-0.1276, 51.5072], // Default center (London)
+    center: [-0.1276, 51.5072],
     zoom: 2
   });
 
@@ -66,6 +84,7 @@
 
     marker._element.dataset.zoomMin = markerData.zoomMin;
     marker._element.dataset.zoomMax = markerData.zoomMax;
+    marker._element.dataset.name = markerData.name.toLowerCase();
 
     mapMarkers.push(marker);
   });
@@ -77,6 +96,18 @@
       const min = parseFloat(el.dataset.zoomMin);
       const max = parseFloat(el.dataset.zoomMax);
       el.style.display = (zoom >= min && zoom <= max) ? 'block' : 'none';
+    });
+  });
+
+  document.getElementById('search-box').addEventListener('input', function(e) {
+    const searchTerm = e.target.value.toLowerCase();
+    mapMarkers.forEach((marker) => {
+      const name = marker.getElement().dataset.name;
+      if (!searchTerm || (name && name.includes(searchTerm))) {
+        marker.getElement().style.display = 'block';
+      } else {
+        marker.getElement().style.display = 'none';
+      }
     });
   });
 </script>
