@@ -93,8 +93,14 @@
         const el = document.createElement('div');
         el.className = 'marker';
 
-        const popup = new mapboxgl.Popup({ offset: 25 })
-          .setHTML((markerData.popup || `<h3>${markerData.name}</h3>`).trim());
+        const popupContent = `
+  <h3>${markerData.name}</h3>
+  ${markerData.popup ? `<p>${markerData.popup}</p>` : ''}
+  ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="color:#0077ff; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ''}
+`;
+
+const popup = new mapboxgl.Popup({ offset: 25 })
+  .setHTML(popupContent);
 
         const marker = new mapboxgl.Marker(el)
           .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
