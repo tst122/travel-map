@@ -139,7 +139,7 @@ el.addEventListener('click', () => {
       matched = true;
       const coordinates = marker.getLngLat();
       map.flyTo({ center: coordinates, zoom: 12, speed: 0.8 });
-      marker.togglePopup();
+      marker.getPopup().addTo(map);
     }
   });
 });
