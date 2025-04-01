@@ -98,18 +98,29 @@
   ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:white; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ''}
 `;
 
-const popup = new mapboxgl.Popup({ offset: 25 })
-  .setHTML(popupContent);
+        const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(popupContent);
 
         const marker = new mapboxgl.Marker(el)
-  .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
-  .setPopup(popup)
-  .addTo(map);
+          .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
+          .setPopup(popup)
+          .addTo(map);
 
-el.addEventListener('click', () => {
-  map.flyTo({ center: [parseFloat(markerData.lng), parseFloat(markerData.lat)], zoom: 12, speed: 0.8 });
-});
+        // On click, fly to the marker
+        el.addEventListener('click', () => {
+          map.flyTo({ center: [parseFloat(markerData.lng), parseFloat(markerData.lat)], zoom: 12, speed: 0.8 });
+        });
 
+        // On hover, show the popup; on mouse leave, hide it.
+        el.addEventListener('mouseenter', () => {
+          map.getCanvas().style.cursor = 'pointer';
+          popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
+        });
+        el.addEventListener('mouseleave', () => {
+          map.getCanvas().style.cursor = '';
+          popup.remove();
+        });
+
+        // Save marker settings for search and zoom filtering.
         marker.getElement().dataset.zoomMin = markerData.zoomMin || 0;
         marker.getElement().dataset.zoomMax = markerData.zoomMax || 20;
         marker.getElement().dataset.name = (markerData.name || '').toLowerCase();
