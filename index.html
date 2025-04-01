@@ -97,60 +97,57 @@
   ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
   ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:white; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ''}
 `;
-        // Create a new popup instance for this marker.
-        const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(popupContent);
+        // Create a new popup instance with click-closing disabled.
+        const popup = new mapboxgl.Popup({ 
+          offset: 25, 
+          closeOnClick: false, 
+          closeButton: false 
+        }).setHTML(popupContent);
 
         const marker = new mapboxgl.Marker(el)
           .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
-          .setPopup(popup)
           .addTo(map);
 
-        // Track hover states.
-        let markerHovered = false;
-        let popupHovered = false;
-        let popupListenersAttached = false;
+        // Variable to hold a timeout ID for hiding the popup.
+        let hideTimeout;
 
-        function checkPopupRemoval() {
-          if (!markerHovered && !popupHovered) {
-            popup.remove();
-            popupListenersAttached = false; // Reset flag so listeners reattach next time.
-          }
-        }
-
-        function attachPopupListeners() {
+        // Attach popup events after it’s added (delay to ensure popup.getElement() returns a valid element).
+        function attachPopupEvents() {
           const popupEl = popup.getElement();
-          if (popupEl && !popupListenersAttached) {
+          if (popupEl) {
+            // When the mouse enters the popup, clear any hide timer.
             popupEl.addEventListener('mouseenter', () => {
-              popupHovered = true;
+              clearTimeout(hideTimeout);
             });
+            // When the mouse leaves the popup, start a timer to hide it.
             popupEl.addEventListener('mouseleave', () => {
-              popupHovered = false;
-              checkPopupRemoval();
+              hideTimeout = setTimeout(() => {
+                popup.remove();
+              }, 300);
             });
-            popupListenersAttached = true;
           }
         }
 
-        // When hovering over the marker, show the popup.
+        // When the mouse enters the marker, clear any hide timer and show the popup.
         el.addEventListener('mouseenter', () => {
-          markerHovered = true;
+          clearTimeout(hideTimeout);
           popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
-          // Delay a little to allow the popup element to be created.
-          setTimeout(attachPopupListeners, 10);
+          setTimeout(attachPopupEvents, 50); // wait for popup element creation
         });
 
-        // When leaving the marker, check if the popup should be removed.
+        // When the mouse leaves the marker, start a timer to hide the popup.
         el.addEventListener('mouseleave', () => {
-          markerHovered = false;
-          setTimeout(checkPopupRemoval, 10);
+          hideTimeout = setTimeout(() => {
+            popup.remove();
+          }, 300);
         });
 
-        // Click event to fly to the marker.
+        // On marker click, fly to its location.
         el.addEventListener('click', () => {
           map.flyTo({ center: [parseFloat(markerData.lng), parseFloat(markerData.lat)], zoom: 12, speed: 0.8 });
         });
 
-        // Save marker settings for search and zoom filtering.
+        // Save marker settings for zoom and search filtering.
         marker.getElement().dataset.zoomMin = markerData.zoomMin || 0;
         marker.getElement().dataset.zoomMax = markerData.zoomMax || 20;
         marker.getElement().dataset.name = (markerData.name || '').toLowerCase();
