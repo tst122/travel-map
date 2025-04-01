@@ -11,7 +11,7 @@
     body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     #map { position: absolute; top: 0; bottom: 0; width: 100%; }
     .marker {
-      background-color: #5a6bff;
+      background-color: #ff5a5f;
       width: 16px;
       height: 16px;
       border-radius: 50%;
@@ -128,19 +128,24 @@ el.addEventListener('click', () => {
       });
 
       document.getElementById('search-box').addEventListener('input', function(e) {
-        const searchTerm = e.target.value.toLowerCase();
-        mapMarkers.forEach((marker) => {
-          const name = marker.getElement().dataset.name;
-          if (!searchTerm || (name && name.includes(searchTerm))) {
-            marker.getElement().style.display = 'block';
-          } else {
-            marker.getElement().style.display = 'none';
-          }
-        });
+  const searchTerm = e.target.value.toLowerCase();
+  let matched = false;
+  mapMarkers.forEach((marker) => {
+    const name = marker.getElement().dataset.name;
+    const isMatch = name && name.includes(searchTerm);
+    marker.getElement().style.display = isMatch || !searchTerm ? 'block' : 'none';
+
+    if (isMatch && !matched) {
+      matched = true;
+      const coordinates = marker.getLngLat();
+      map.flyTo({ center: coordinates, zoom: 12, speed: 0.8 });
+      marker.togglePopup();
+    }
+  });
+});
       });
     }
   });
 </script>
 </body>
 </html>
-
