@@ -105,49 +105,49 @@
           .setPopup(popup)
           .addTo(map);
 
-        // Variables to track whether the mouse is over the marker or the popup.
+        // Track hover states.
         let markerHovered = false;
         let popupHovered = false;
+        let popupListenersAttached = false;
 
-        // Function to check if both elements are not hovered and remove the popup if so.
         function checkPopupRemoval() {
           if (!markerHovered && !popupHovered) {
             popup.remove();
+            popupListenersAttached = false; // Reset flag so listeners reattach next time.
           }
         }
 
-        // On click, fly to the marker.
-        el.addEventListener('click', () => {
-          map.flyTo({ center: [parseFloat(markerData.lng), parseFloat(markerData.lat)], zoom: 12, speed: 0.8 });
-        });
+        function attachPopupListeners() {
+          const popupEl = popup.getElement();
+          if (popupEl && !popupListenersAttached) {
+            popupEl.addEventListener('mouseenter', () => {
+              popupHovered = true;
+            });
+            popupEl.addEventListener('mouseleave', () => {
+              popupHovered = false;
+              checkPopupRemoval();
+            });
+            popupListenersAttached = true;
+          }
+        }
 
-        // When the mouse enters the marker, mark it as hovered and open the popup.
+        // When hovering over the marker, show the popup.
         el.addEventListener('mouseenter', () => {
           markerHovered = true;
           popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
-          // When the popup opens, attach event listeners to its element.
-          popup.on('open', () => {
-            const popupEl = popup.getElement();
-            if (popupEl) {
-              // Remove any previous listeners to avoid duplicate handlers.
-              popupEl.onmouseenter = null;
-              popupEl.onmouseleave = null;
-              popupEl.addEventListener('mouseenter', () => {
-                popupHovered = true;
-              });
-              popupEl.addEventListener('mouseleave', () => {
-                popupHovered = false;
-                // Check if we should remove the popup when the mouse leaves the popup.
-                setTimeout(checkPopupRemoval, 0);
-              });
-            }
-          });
+          // Delay a little to allow the popup element to be created.
+          setTimeout(attachPopupListeners, 10);
         });
 
-        // When the mouse leaves the marker, mark it as not hovered and check removal.
+        // When leaving the marker, check if the popup should be removed.
         el.addEventListener('mouseleave', () => {
           markerHovered = false;
-          setTimeout(checkPopupRemoval, 0);
+          setTimeout(checkPopupRemoval, 10);
+        });
+
+        // Click event to fly to the marker.
+        el.addEventListener('click', () => {
+          map.flyTo({ center: [parseFloat(markerData.lng), parseFloat(markerData.lat)], zoom: 12, speed: 0.8 });
         });
 
         // Save marker settings for search and zoom filtering.
@@ -174,11 +174,7 @@
         const searchTerm = e.target.value.toLowerCase();
         mapMarkers.forEach((marker) => {
           const name = marker.getElement().dataset.name;
-          if (!searchTerm || (name && name.includes(searchTerm))) {
-            marker.getElement().style.display = 'block';
-          } else {
-            marker.getElement().style.display = 'none';
-          }
+          marker.getElement().style.display = (!searchTerm || (name && name.includes(searchTerm))) ? 'block' : 'none';
         });
       });
     }
@@ -186,4 +182,5 @@
 </script>
 </body>
 </html>
+
 
