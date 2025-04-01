@@ -94,9 +94,8 @@
         el.className = 'marker';
 
         const popupContent = `
-  <h3>${markerData.name}</h3>
-  ${markerData.popup ? `<p>${markerData.popup}</p>` : ''}
-  ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="color:#0077ff; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ''}
+  ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
+  ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:white; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ''}
 `;
 
 const popup = new mapboxgl.Popup({ offset: 25 })
