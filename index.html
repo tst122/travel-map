@@ -73,22 +73,21 @@
         el.className = 'marker';
 
         const popup = new mapboxgl.Popup({ offset: 25 })
-  .setHTML((markerData.popup || `<strong>${markerData.name}</strong>`).trim());
-
-const marker = new mapboxgl.Marker(el)
-  .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
-  .setPopup(popup)
-  .addTo(map);
+          .setHTML((markerData.popup || `<strong>${markerData.name}</strong>`).trim());
 
         const marker = new mapboxgl.Marker(el)
           .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
+          .setPopup(popup)
           .addTo(map);
 
-        marker._element.dataset.zoomMin = markerData.zoomMin || 0;
-        marker._element.dataset.zoomMax = markerData.zoomMax || 20;
-        marker._element.dataset.name = (markerData.name || '').toLowerCase();
+        marker.getElement().dataset.zoomMin = markerData.zoomMin || 0;
+        marker.getElement().dataset.zoomMax = markerData.zoomMax || 20;
+        marker.getElement().dataset.name = (markerData.name || '').toLowerCase();
 
         mapMarkers.push(marker);
+      });
+    }
+  });
       });
     }
   });
@@ -117,4 +116,3 @@ const marker = new mapboxgl.Marker(el)
 </script>
 </body>
 </html>
-
