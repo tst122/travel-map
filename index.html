@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <style>
     body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     #map { position: absolute; top: 0; bottom: 0; width: 100%; }
@@ -59,44 +60,40 @@
     zoom: 2
   });
 
-  const markers = [
-    {
-      name: "Paris",
-      lat: 48.8566,
-      lng: 2.3522,
-      zoomMin: 0,
-      zoomMax: 10,
-      link: "https://yourwebsite.com/paris"
-    },
-    {
-      name: "Hotel XYZ (Paris)",
-      lat: 48.8584,
-      lng: 2.2945,
-      zoomMin: 11,
-      zoomMax: 20,
-      link: "https://booking.com/hotelXYZ"
-    }
-  ];
-
   const mapMarkers = [];
 
-  markers.forEach((markerData) => {
-    const el = document.createElement('div');
-    el.className = 'marker';
+  Papa.parse('https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv', {
+    download: true,
+    header: true,
+    complete: function(results) {
+      results.data.forEach((markerData) => {
+        if (!markerData.lat || !markerData.lng) return;
 
-    el.addEventListener('click', () => {
-      window.open(markerData.link, '_blank');
-    });
+        const el = document.createElement('div');
+        el.className = 'marker';
 
-    const marker = new mapboxgl.Marker(el)
-      .setLngLat([markerData.lng, markerData.lat])
-      .addTo(map);
+        el.addEventListener('click', () => {
+          if (markerData.popup) {
+            new mapboxgl.Popup()
+              .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
+              .setHTML(markerData.popup)
+              .addTo(map);
+          } else if (markerData.link) {
+            window.open(markerData.link, '_blank');
+          }
+        });
 
-    marker._element.dataset.zoomMin = markerData.zoomMin;
-    marker._element.dataset.zoomMax = markerData.zoomMax;
-    marker._element.dataset.name = markerData.name.toLowerCase();
+        const marker = new mapboxgl.Marker(el)
+          .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
+          .addTo(map);
 
-    mapMarkers.push(marker);
+        marker._element.dataset.zoomMin = markerData.zoomMin || 0;
+        marker._element.dataset.zoomMax = markerData.zoomMax || 20;
+        marker._element.dataset.name = (markerData.name || '').toLowerCase();
+
+        mapMarkers.push(marker);
+      });
+    }
   });
 
   map.on('zoom', () => {
