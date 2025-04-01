@@ -105,7 +105,7 @@
   <div id="search-container">
     <input type="text" id="search-box" placeholder="🔍 Search locations...">
   </div>
-  <!-- Sidebar popup -->
+  <!-- Sidebar (side popup) -->
   <div id="side-popup"></div>
   <div id="map"></div>
 
@@ -120,9 +120,10 @@
     });
 
     const mapMarkers = [];
-    let lockedCity = null; // holds city data when a city marker is clicked
+    // This variable holds city info when a city marker is clicked (locked)
+    let lockedCity = null;
 
-    // Update the side popup (for city markers only)
+    // Updates the fixed side popup with the city info.
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
@@ -151,14 +152,14 @@
             ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
             ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:white; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ''}
           `;
-          // Create a hover popup (with closeOnClick disabled)
+          // Create a hover popup (this one disappears on mouseleave)
           const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false }).setHTML(popupContent);
 
           const marker = new mapboxgl.Marker(el)
             .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
             .addTo(map);
 
-          // Save marker data (including the isCity flag) for later use.
+          // Save marker data (including isCity flag) for later use.
           marker.markerData = markerData;
 
           let hideTimeout;
@@ -188,7 +189,7 @@
             }, 300);
           });
 
-          // On marker click: fly to location and lock the side popup (if it’s a city).
+          // On marker click: fly to the location and “lock” the side popup if it’s a city.
           el.addEventListener('click', () => {
             map.flyTo({ center: [parseFloat(markerData.lng), parseFloat(markerData.lat)], zoom: 12, speed: 0.8 });
             if (markerData.isCity && markerData.isCity.toLowerCase() === 'true') {
@@ -228,21 +229,21 @@
           });
         });
 
-        // On map moveend (after zoom or pan), update the side popup for cities.
+        // On map moveend, update the side popup for cities.
         map.on('moveend', () => {
           const zoom = map.getZoom();
-          // Hide the side popup if zoom is too low.
+          // Hide side popup if zoom is too low.
           if (zoom < 10) {
             updateSidePopup(null);
             lockedCity = null;
             return;
           }
-          // If a city has been clicked and locked, keep showing it.
+          // If a city marker was clicked, keep it locked.
           if (lockedCity) {
             updateSidePopup(lockedCity);
             return;
           }
-          // Otherwise, look for the closest city marker (from CSV, isCity == "true") to the canvas center.
+          // Otherwise, find the closest city marker (from CSV, isCity == "true") to the canvas center.
           const canvasCenter = {
             x: map.getCanvas().width / 2,
             y: map.getCanvas().height / 2
@@ -261,8 +262,8 @@
               }
             }
           });
-          // If the closest city marker is within 150 pixels of center OR within 300 pixels (even if hidden by zoom filtering), show its info.
-          if (closestCityMarker && (minDistance < 150 || minDistance < 300)) {
+          // Use a generous threshold (300 pixels) so that if you zoom in far enough—even if the marker is hidden—the popup appears.
+          if (closestCityMarker && minDistance < 300) {
             updateSidePopup(closestCityMarker.markerData);
           } else {
             updateSidePopup(null);
