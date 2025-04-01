@@ -33,7 +33,7 @@
     .mapboxgl-popup-content {
       padding: 15px;
       border-radius: 12px;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.2);
       background: white;
       color: #333;
     }
@@ -56,7 +56,7 @@
       background: #fff;
       padding: 10px 15px;
       border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
     }
     #search-box {
       padding: 10px;
@@ -70,7 +70,7 @@
     #search-box:focus {
       outline: none;
       border-color: #0077ff;
-      box-shadow: 0 0 5px rgba(0, 119, 255, 0.4);
+      box-shadow: 0 0 5px rgba(0,119,255,0.4);
     }
     /* Sidebar (side popup) styling */
     #side-popup {
@@ -80,7 +80,7 @@
       width: 250px;
       background: white;
       border-radius: 8px;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
       padding: 15px;
       display: none;
       z-index: 11;
@@ -120,9 +120,9 @@
     });
 
     const mapMarkers = [];
-    let selectedMarkerData = null; // stores the last clicked or auto-selected city marker
+    let lockedCity = null; // holds city data when a city marker is clicked
 
-    // Update the side popup (only for cities)
+    // Update the side popup (for city markers only)
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
@@ -151,7 +151,7 @@
             ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
             ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:white; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ''}
           `;
-          // Create a hover popup (with click-closing disabled)
+          // Create a hover popup (with closeOnClick disabled)
           const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false }).setHTML(popupContent);
 
           const marker = new mapboxgl.Marker(el)
@@ -162,7 +162,6 @@
           marker.markerData = markerData;
 
           let hideTimeout;
-
           function attachPopupEvents() {
             const popupEl = popup.getElement();
             if (popupEl) {
@@ -180,7 +179,7 @@
           el.addEventListener('mouseenter', () => {
             clearTimeout(hideTimeout);
             popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
-            setTimeout(attachPopupEvents, 50); // allow time for the popup element to be created
+            setTimeout(attachPopupEvents, 50);
           });
 
           el.addEventListener('mouseleave', () => {
@@ -189,19 +188,19 @@
             }, 300);
           });
 
-          // On marker click: fly to location and update side popup if it's a city.
+          // On marker click: fly to location and lock the side popup (if it’s a city).
           el.addEventListener('click', () => {
             map.flyTo({ center: [parseFloat(markerData.lng), parseFloat(markerData.lat)], zoom: 12, speed: 0.8 });
             if (markerData.isCity && markerData.isCity.toLowerCase() === 'true') {
-              selectedMarkerData = markerData;
+              lockedCity = markerData;
               updateSidePopup(markerData);
             } else {
-              selectedMarkerData = null;
+              lockedCity = null;
               updateSidePopup(null);
             }
           });
 
-          // Save marker settings for zoom and search filtering.
+          // Set marker zoom range for filtering.
           marker.getElement().dataset.zoomMin = markerData.zoomMin || 0;
           marker.getElement().dataset.zoomMax = markerData.zoomMax || 20;
           marker.getElement().dataset.name = (markerData.name || '').toLowerCase();
@@ -229,15 +228,21 @@
           });
         });
 
-        // On map moveend (after zoom or pan), update the side popup based on the closest city marker.
+        // On map moveend (after zoom or pan), update the side popup for cities.
         map.on('moveend', () => {
           const zoom = map.getZoom();
+          // Hide the side popup if zoom is too low.
           if (zoom < 10) {
             updateSidePopup(null);
-            selectedMarkerData = null;
+            lockedCity = null;
             return;
           }
-          // Determine the canvas center.
+          // If a city has been clicked and locked, keep showing it.
+          if (lockedCity) {
+            updateSidePopup(lockedCity);
+            return;
+          }
+          // Otherwise, look for the closest city marker (from CSV, isCity == "true") to the canvas center.
           const canvasCenter = {
             x: map.getCanvas().width / 2,
             y: map.getCanvas().height / 2
@@ -245,7 +250,6 @@
           let closestCityMarker = null;
           let minDistance = Infinity;
           mapMarkers.forEach(marker => {
-            // Only consider markers flagged as cities.
             if (marker.markerData.isCity && marker.markerData.isCity.toLowerCase() === 'true') {
               const screenPos = map.project(marker.getLngLat());
               const dx = screenPos.x - canvasCenter.x;
@@ -257,13 +261,11 @@
               }
             }
           });
-          // If the closest city marker is within 150 pixels of center, update the sidebar.
-          if (closestCityMarker && minDistance < 150) {
+          // If the closest city marker is within 150 pixels of center OR within 300 pixels (even if hidden by zoom filtering), show its info.
+          if (closestCityMarker && (minDistance < 150 || minDistance < 300)) {
             updateSidePopup(closestCityMarker.markerData);
-            selectedMarkerData = closestCityMarker.markerData;
           } else {
             updateSidePopup(null);
-            selectedMarkerData = null;
           }
         });
       }
@@ -271,3 +273,4 @@
   </script>
 </body>
 </html>
+
