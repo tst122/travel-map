@@ -72,12 +72,13 @@
         const el = document.createElement('div');
         el.className = 'marker';
 
-        el.addEventListener('click', () => {
-  new mapboxgl.Popup()
-    .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
-    .setHTML(markerData.popup || `<strong>${markerData.name}</strong>`)
-    .addTo(map);
-});
+        const popup = new mapboxgl.Popup({ offset: 25 })
+  .setHTML((markerData.popup || `<strong>${markerData.name}</strong>`).trim());
+
+const marker = new mapboxgl.Marker(el)
+  .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
+  .setPopup(popup)
+  .addTo(map);
 
         const marker = new mapboxgl.Marker(el)
           .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
