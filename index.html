@@ -11,7 +11,7 @@
     body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     #map { position: absolute; top: 0; bottom: 0; width: 100%; }
     .marker {
-      background-color: #5a6bff;
+      background-color: #ff5a5f;
       width: 16px;
       height: 16px;
       border-radius: 50%;
@@ -106,6 +106,18 @@ const popup = new mapboxgl.Popup({ offset: 25 })
   .setPopup(popup)
   .addTo(map);
 
+// Hover popup with name only
+const hoverPopup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false })
+  .setText(markerData.name);
+
+el.addEventListener('mouseenter', () => {
+  hoverPopup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
+});
+
+el.addEventListener('mouseleave', () => {
+  hoverPopup.remove();
+});
+
 el.addEventListener('click', () => {
   map.flyTo({ center: [parseFloat(markerData.lng), parseFloat(markerData.lat)], zoom: 12, speed: 0.8 });
 });
@@ -113,6 +125,18 @@ el.addEventListener('click', () => {
         marker.getElement().dataset.zoomMin = markerData.zoomMin || 0;
         marker.getElement().dataset.zoomMax = markerData.zoomMax || 20;
         marker.getElement().dataset.name = (markerData.name || '').toLowerCase();
+
+// Add hover popup for name only
+const hoverPopup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false })
+  .setText(markerData.name);
+
+el.addEventListener('mouseenter', () => {
+  hoverPopup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
+});
+
+el.addEventListener('mouseleave', () => {
+  hoverPopup.remove();
+});
 
         mapMarkers.push(marker);
       });
@@ -127,21 +151,11 @@ el.addEventListener('click', () => {
         });
       });
 
-      document.getElementById('search-box').addEventListener('input', function(e) {
-        const searchTerm = e.target.value.toLowerCase();
-        mapMarkers.forEach((marker) => {
-          const name = marker.getElement().dataset.name;
-          if (!searchTerm || (name && name.includes(searchTerm))) {
-            marker.getElement().style.display = 'block';
-          } else {
-            marker.getElement().style.display = 'none';
-          }
-        });
+      
       });
     }
   });
 </script>
 </body>
 </html>
-
 
