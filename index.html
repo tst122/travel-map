@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Custom Mapbox Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    .marker {
+      background-color: #ff5a5f;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+
+<script>
+  mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN';
+
+  const map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/streets-v12',
+    center: [-0.1276, 51.5072], // Default center (London)
+    zoom: 2
+  });
+
+  const markers = [
+    {
+      name: "Paris",
+      lat: 48.8566,
+      lng: 2.3522,
+      zoomMin: 0,
+      zoomMax: 10,
+      link: "https://yourwebsite.com/paris"
+    },
+    {
+      name: "Hotel XYZ (Paris)",
+      lat: 48.8584,
+      lng: 2.2945,
+      zoomMin: 11,
+      zoomMax: 20,
+      link: "https://booking.com/hotelXYZ"
+    }
+  ];
+
+  const mapMarkers = [];
+
+  markers.forEach((markerData) => {
+    const el = document.createElement('div');
+    el.className = 'marker';
+
+    el.addEventListener('click', () => {
+      window.open(markerData.link, '_blank');
+    });
+
+    const marker = new mapboxgl.Marker(el)
+      .setLngLat([markerData.lng, markerData.lat])
+      .addTo(map);
+
+    marker._element.dataset.zoomMin = markerData.zoomMin;
+    marker._element.dataset.zoomMax = markerData.zoomMax;
+
+    mapMarkers.push(marker);
+  });
+
+  map.on('zoom', () => {
+    const zoom = map.getZoom();
+    mapMarkers.forEach((marker) => {
+      const el = marker.getElement();
+      const min = parseFloat(el.dataset.zoomMin);
+      const max = parseFloat(el.dataset.zoomMax);
+      el.style.display = (zoom >= min && zoom <= max) ? 'block' : 'none';
+    });
+  });
+</script>
+</body>
+</html>
