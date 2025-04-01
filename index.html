@@ -105,19 +105,34 @@
           .setPopup(popup)
           .addTo(map);
 
-        // On click, fly to the marker
+        // On click, fly to the marker.
         el.addEventListener('click', () => {
           map.flyTo({ center: [parseFloat(markerData.lng), parseFloat(markerData.lat)], zoom: 12, speed: 0.8 });
         });
 
-        // On hover, show the popup; on mouse leave, hide it.
+        // Create a timeout variable to manage popup hide delay.
+        let popupTimeout;
+
+        // Show popup on marker hover.
         el.addEventListener('mouseenter', () => {
-          map.getCanvas().style.cursor = 'pointer';
+          clearTimeout(popupTimeout);
           popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
         });
+        // Start timeout on marker mouse leave.
         el.addEventListener('mouseleave', () => {
-          map.getCanvas().style.cursor = '';
-          popup.remove();
+          popupTimeout = setTimeout(() => {
+            popup.remove();
+          }, 300);
+        });
+
+        // Attach events to the popup element to keep it open when hovered.
+        popup.getElement().addEventListener('mouseenter', () => {
+          clearTimeout(popupTimeout);
+        });
+        popup.getElement().addEventListener('mouseleave', () => {
+          popupTimeout = setTimeout(() => {
+            popup.remove();
+          }, 300);
         });
 
         // Save marker settings for search and zoom filtering.
