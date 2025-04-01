@@ -127,29 +127,13 @@ el.addEventListener('click', () => {
         });
       });
 
-      document.getElementById('search-box').addEventListener('input', function(e) {
-  const searchTerm = e.target.value.toLowerCase();
-  let matched = false;
-  mapMarkers.forEach((marker) => {
-    const name = marker.getElement().dataset.name;
-    const isMatch = name && name.includes(searchTerm);
-    marker.getElement().style.display = isMatch || !searchTerm ? 'block' : 'none';
-
-    if (isMatch && !matched) {
-      matched = true;
-      const coordinates = marker.getLngLat();
-      map.flyTo({ center: coordinates, zoom: 12, speed: 0.8 });
-      map.once('moveend', () => {
-        marker.togglePopup();
-      });
-    }
-  });
-});
+      
       });
     }
   });
 </script>
 </body>
 </html>
+
 
 
