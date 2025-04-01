@@ -140,7 +140,7 @@ el.addEventListener('click', () => {
       const coordinates = marker.getLngLat();
       map.flyTo({ center: coordinates, zoom: 12, speed: 0.8 });
       map.once('moveend', () => {
-        marker.getPopup().setLngLat(coordinates).addTo(map);
+        marker.togglePopup();
       });
     }
   });
@@ -151,4 +151,5 @@ el.addEventListener('click', () => {
 </script>
 </body>
 </html>
+
 
