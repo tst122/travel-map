@@ -86,32 +86,31 @@
 
         mapMarkers.push(marker);
       });
-    }
-  });
+
+      // Zoom visibility logic
+      map.on('zoom', () => {
+        const zoom = map.getZoom();
+        mapMarkers.forEach((marker) => {
+          const el = marker.getElement();
+          const min = parseFloat(el.dataset.zoomMin);
+          const max = parseFloat(el.dataset.zoomMax);
+          el.style.display = (zoom >= min && zoom <= max) ? 'block' : 'none';
+        });
+      });
+
+      // Search filtering logic
+      document.getElementById('search-box').addEventListener('input', function(e) {
+        const searchTerm = e.target.value.toLowerCase();
+        mapMarkers.forEach((marker) => {
+          const name = marker.getElement().dataset.name;
+          if (!searchTerm || (name && name.includes(searchTerm))) {
+            marker.getElement().style.display = 'block';
+          } else {
+            marker.getElement().style.display = 'none';
+          }
+        });
       });
     }
-  });
-
-  map.on('zoom', () => {
-    const zoom = map.getZoom();
-    mapMarkers.forEach((marker) => {
-      const el = marker.getElement();
-      const min = parseFloat(el.dataset.zoomMin);
-      const max = parseFloat(el.dataset.zoomMax);
-      el.style.display = (zoom >= min && zoom <= max) ? 'block' : 'none';
-    });
-  });
-
-  document.getElementById('search-box').addEventListener('input', function(e) {
-    const searchTerm = e.target.value.toLowerCase();
-    mapMarkers.forEach((marker) => {
-      const name = marker.getElement().dataset.name;
-      if (!searchTerm || (name && name.includes(searchTerm))) {
-        marker.getElement().style.display = 'block';
-      } else {
-        marker.getElement().style.display = 'none';
-      }
-    });
   });
 </script>
 </body>
