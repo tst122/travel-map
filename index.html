@@ -4,8 +4,10 @@
   <meta charset="utf-8">
   <title>Custom Mapbox Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Mapbox GL JS -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+  <!-- PapaParse -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <style>
     body {
@@ -53,7 +55,7 @@
       margin: 0;
       font-size: 14px;
     }
-    /* Search container style */
+    /* Search container style with transparency and blur */
     #search-container {
       position: absolute;
       top: 20px;
@@ -82,7 +84,7 @@
     #search-box:focus {
       box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
     }
-    /* Side popup style */
+    /* Side popup (click popup) style */
     #side-popup {
       position: absolute;
       top: 20px;
@@ -125,10 +127,172 @@
   <!-- Side popup -->
   <div id="side-popup"></div>
   <div id="map"></div>
-
-  <!-- The rest of your JavaScript code for loading markers and popups remains unchanged. -->
   <script>
-    // Your existing code goes here...
+    mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
+
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/sicko5/cm6k1juil010301qm2krq7o84',
+      center: [-0.1276, 51.5072],
+      zoom: 2
+    });
+
+    const mapMarkers = [];
+    const cityMarkers = [];  // Only markers flagged as cities.
+    let lockedCity = null;   // Holds city data when a city marker is clicked.
+
+    // Updated function: if a "popup" field exists, use it without repeating the city name.
+    function updateSidePopup(data) {
+      const sidePopup = document.getElementById('side-popup');
+      if (data) {
+        let content = "";
+        if (!data.popup) {
+          content += `<h3>${data.name}</h3>`;
+        }
+        content += data.popup ? `<div>${data.popup}</div>` : "";
+        content += data.link ? `<a href="${data.link}" target="_blank">Explore →</a>` : "";
+        sidePopup.innerHTML = content;
+        sidePopup.style.display = "block";
+      } else {
+        sidePopup.style.display = "none";
+      }
+    }
+
+    // Helper: Update marker visibility based on zoom.
+    function updateMarkerVisibility() {
+      const zoom = map.getZoom();
+      mapMarkers.forEach(marker => {
+        const el = marker.getElement();
+        const min = parseFloat(el.dataset.zoomMin);
+        const max = parseFloat(el.dataset.zoomMax);
+        el.style.display = (zoom >= min && zoom <= max) ? "block" : "none";
+      });
+    }
+
+    Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv", {
+      download: true,
+      header: true,
+      complete: function (results) {
+        results.data.forEach(markerData => {
+          if (!markerData.lat || !markerData.lng) return;
+
+          const el = document.createElement("div");
+          el.className = "marker";
+
+          const popupContent = `
+            ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
+            ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:#fff; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ""}
+          `;
+          const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false })
+            .setHTML(popupContent);
+
+          const marker = new mapboxgl.Marker(el)
+            .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
+            .addTo(map);
+
+          marker.markerData = markerData;
+          if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
+            cityMarkers.push(marker);
+          }
+
+          let isOverMarker = false;
+          let isOverPopup = false;
+
+          el.addEventListener("mouseenter", () => {
+            isOverMarker = true;
+            popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
+            popup.once("open", () => {
+              const popupEl = popup.getElement();
+              if (popupEl) {
+                popupEl.addEventListener("mouseenter", () => { isOverPopup = true; });
+                popupEl.addEventListener("mouseleave", () => {
+                  isOverPopup = false;
+                  if (!isOverMarker) popup.remove();
+                });
+              }
+            });
+          });
+
+          el.addEventListener("mouseleave", () => {
+            isOverMarker = false;
+            setTimeout(() => {
+              if (!isOverMarker && !isOverPopup) {
+                popup.remove();
+              }
+            }, 0);
+          });
+
+          el.addEventListener("click", () => {
+            map.flyTo({
+              center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+              zoom: 12,
+              speed: 0.8
+            });
+            if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
+              lockedCity = markerData;
+              updateSidePopup(markerData);
+            } else {
+              lockedCity = null;
+              updateSidePopup(null);
+            }
+          });
+
+          if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
+            el.dataset.zoomMin = markerData.zoomMin || 0;
+          } else {
+            el.dataset.zoomMin = markerData.zoomMin || 12;
+          }
+          el.dataset.zoomMax = markerData.zoomMax || 20;
+          el.dataset.name = (markerData.name || "").toLowerCase();
+
+          mapMarkers.push(marker);
+        });
+        updateMarkerVisibility();
+      }
+    });
+
+    map.on("zoom", updateMarkerVisibility);
+
+    document.getElementById("search-box").addEventListener("input", function (e) {
+      const searchTerm = e.target.value.toLowerCase();
+      mapMarkers.forEach(marker => {
+        const name = marker.getElement().dataset.name;
+        marker.getElement().style.display = (!searchTerm || (name && name.includes(searchTerm))) ? "block" : "none";
+      });
+    });
+
+    map.on("moveend", () => {
+      const zoom = map.getZoom();
+      if (zoom < 12) {
+        updateSidePopup(null);
+        lockedCity = null;
+        return;
+      }
+      if (lockedCity) {
+        updateSidePopup(lockedCity);
+        return;
+      }
+      const canvasCenter = { x: map.getCanvas().width / 2, y: map.getCanvas().height / 2 };
+      let closestCity = null;
+      let minDist = Infinity;
+      for (let i = 0; i < cityMarkers.length; i++) {
+        const marker = cityMarkers[i];
+        const screenPos = map.project(marker.getLngLat());
+        const dx = screenPos.x - canvasCenter.x;
+        const dy = screenPos.y - canvasCenter.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < minDist) {
+          minDist = dist;
+          closestCity = marker;
+        }
+      }
+      if (closestCity && minDist < 100) {
+        updateSidePopup(closestCity.markerData);
+      } else {
+        updateSidePopup(null);
+      }
+    });
   </script>
 </body>
 </html>
+
