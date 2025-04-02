@@ -130,7 +130,7 @@
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
-    // Throttle function: ensures function is called at most once every "limit" ms.
+    // Throttle function to limit function calls (used for mousemove)
     function throttle(func, limit) {
       let lastFunc;
       let lastRan;
@@ -164,10 +164,10 @@
     const mapMarkers = [];
     const cityMarkers = [];
     let lockedCity = null;
-    // Flag to disable country hover effect once a country is clicked.
+    // Flag to disable country hover effect when a country is clicked.
     let countryLocked = false;
     
-    // Function to update the side popup with marker data.
+    // Function to update the side popup using marker data.
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
@@ -184,7 +184,7 @@
       }
     }
     
-    // Update marker visibility based on current zoom.
+    // Update marker visibility based on zoom.
     function updateMarkerVisibility() {
       const zoom = map.getZoom();
       mapMarkers.forEach(marker => {
@@ -217,7 +217,6 @@
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             cityMarkers.push(marker);
           }
-    
           // Hover popup behavior.
           let isOverMarker = false;
           let isOverPopup = false;
@@ -245,7 +244,7 @@
               }
             }, 0);
           });
-          // On marker click: prevent propagation so country click isn't triggered, zoom in (zoom 14) and update side popup.
+          // On marker click: stop propagation, zoom in (to zoom 14), and update side popup.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             countryLocked = false;
@@ -324,9 +323,11 @@
     });
     
     /* Add interactive country boundaries using fill layers.
-       The hover effect is enabled when zoom is at or below 5,
-       and disabled if a country has been clicked (via countryLocked flag).
-       Additionally, the mousemove event is throttled for better performance.
+       The hover effect is enabled only when zoom is at or below a threshold.
+       For North America, the threshold is lower (e.g. zoom > 4 disables hover),
+       while for other regions, zoom > 5 disables the hover effect.
+       Once a country is clicked, the hover effect is disabled via the countryLocked flag.
+       The mousemove event is throttled for performance.
     */
     map.on("load", function() {
       map.addSource("country-boundaries", {
@@ -370,17 +371,25 @@
         }
       });
       
-      // Throttle the mousemove event to improve performance.
+      // List of North American ISO codes (adjust as needed).
+      const naCountries = ["USA", "CAN", "MEX"];
+      
+      // Throttled mousemove for country hover.
       map.on("mousemove", throttle(function(e) {
-        // Disable hover effect if zoom is above 5 or a country is locked.
-        if (map.getZoom() > 5 || countryLocked) {
-          map.getCanvas().style.cursor = "";
-          map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
-          return;
-        }
+        // Determine the current zoom threshold based on region.
+        let threshold = 5; // default for non-NA countries.
+        // Query the country feature at the pointer.
         const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
         if (features.length > 0) {
           const feature = features[0];
+          if (naCountries.includes(feature.properties.iso_3166_1)) {
+            threshold = 4; // For North America, disable hover if zoom is above 4.
+          }
+          if (map.getZoom() > threshold || countryLocked) {
+            map.getCanvas().style.cursor = "";
+            map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
+            return;
+          }
           map.getCanvas().style.cursor = "pointer";
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", feature.properties.iso_3166_1]);
         } else {
@@ -401,11 +410,10 @@
       });
     });
     
-    // Reset countryLocked when clicking on a marker.
+    // Reset countryLocked when clicking on empty space or a marker.
     map.on("click", function(e) {
       countryLocked = false;
     });
   </script>
 </body>
 </html>
-
