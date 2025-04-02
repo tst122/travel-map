@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Custom Map with Interactive Countries</title>
+  <title>Custom Map with Interactive Countries & Points</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Mapbox GL JS -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
@@ -57,7 +57,7 @@
       margin: 0;
       font-size: 14px;
     }
-    /* Search container style with transparency and blur */
+    /* Search container style with slight transparency and blur */
     #search-container {
       position: absolute;
       top: 20px;
@@ -86,7 +86,7 @@
     #search-box:focus {
       box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
     }
-    /* Side popup (click popup) style */
+    /* Side popup style */
     #side-popup {
       position: absolute;
       top: 20px;
@@ -130,7 +130,7 @@
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
-    // Use your original Mapbox style URL.
+    // Use your original Mapbox style and access token.
     mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
     const map = new mapboxgl.Map({
       container: 'map',
@@ -143,7 +143,7 @@
     const cityMarkers = [];
     let lockedCity = null;
     
-    // Function to update the side popup (for city info)
+    // Function to update the side popup using marker data.
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
@@ -160,7 +160,7 @@
       }
     }
     
-    // Helper: Update marker visibility based on zoom.
+    // Update marker visibility based on current zoom level.
     function updateMarkerVisibility() {
       const zoom = map.getZoom();
       mapMarkers.forEach(marker => {
@@ -171,7 +171,7 @@
       });
     }
     
-    // Load CSV markers via PapaParse.
+    // Load markers from CSV via PapaParse.
     Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv", {
       download: true,
       header: true,
@@ -180,19 +180,47 @@
           if (!markerData.lat || !markerData.lng) return;
           const el = document.createElement("div");
           el.className = "marker";
+    
           const popupContent = `
             ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
             ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:#fff; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ""}
           `;
           const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false })
             .setHTML(popupContent);
+    
           const marker = new mapboxgl.Marker(el)
             .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
             .addTo(map);
+    
           marker.markerData = markerData;
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             cityMarkers.push(marker);
           }
+    
+          // Ensure marker click events do not propagate to country layers.
+          el.addEventListener("click", (e) => {
+            e.stopPropagation();
+            // Use a higher zoom (14) so it zooms in fully.
+            if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
+              map.flyTo({
+                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+                zoom: 14,
+                speed: 0.8
+              });
+              lockedCity = markerData;
+              updateSidePopup(markerData);
+            } else {
+              map.flyTo({
+                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+                zoom: 14,
+                speed: 0.8
+              });
+              lockedCity = null;
+              updateSidePopup(markerData);
+            }
+          });
+    
+          // Hover popup behavior.
           let isOverMarker = false;
           let isOverPopup = false;
           el.addEventListener("mouseenter", () => {
@@ -217,25 +245,8 @@
               }
             }, 0);
           });
-          el.addEventListener("click", () => {
-            if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
-              map.flyTo({
-                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
-                zoom: 12,
-                speed: 0.8
-              });
-              lockedCity = markerData;
-              updateSidePopup(markerData);
-            } else {
-              map.flyTo({
-                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
-                zoom: 12,
-                speed: 0.8
-              });
-              lockedCity = null;
-              updateSidePopup(null);
-            }
-          });
+    
+          // Set zoom filtering data.
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             el.dataset.zoomMin = markerData.zoomMin || 0;
           } else {
@@ -243,6 +254,7 @@
           }
           el.dataset.zoomMax = markerData.zoomMax || 20;
           el.dataset.name = (markerData.name || "").toLowerCase();
+    
           mapMarkers.push(marker);
         });
         updateMarkerVisibility();
@@ -291,14 +303,13 @@
       }
     });
     
-    /* Add interactive country boundaries using Mapbox's vector source and fill layers */
+    /* Add interactive country boundaries using fill layers so that clicking anywhere inside a country works */
     map.on("load", function() {
-      // Add country boundaries as a vector source.
       map.addSource("country-boundaries", {
         type: "vector",
         url: "mapbox://mapbox.country-boundaries-v1"
       });
-      // Add a fill layer for country areas (invisible but interactive).
+      // Add a fill layer for country areas (invisible by default but interactive).
       map.addLayer({
         id: "country-fills",
         type: "fill",
@@ -310,7 +321,7 @@
           "fill-opacity": 0
         }
       });
-      // Add a fill highlight layer for hover effect.
+      // Add a fill layer for hover effect (slight color change).
       map.addLayer({
         id: "country-fills-highlight",
         type: "fill",
@@ -322,7 +333,7 @@
         },
         filter: ["==", "iso_3166_1", ""]
       });
-      // Add a line layer for natural country borders.
+      // Add a line layer for natural borders.
       map.addLayer({
         id: "country-borders",
         type: "line",
@@ -334,8 +345,8 @@
           "line-width": 1
         }
       });
-      // When the mouse moves over country areas, update the highlight layer.
-      map.on("mousemove", "country-fills", function(e) {
+      // Change cursor when hovering over country areas.
+      map.on("mouseenter", "country-fills", function(e) {
         map.getCanvas().style.cursor = "pointer";
         if (e.features.length > 0) {
           var feature = e.features[0];
@@ -346,7 +357,7 @@
         map.getCanvas().style.cursor = "";
         map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
       });
-      // On click anywhere within a country, zoom to its bounds.
+      // On click anywhere inside a country, zoom to its bounds.
       map.on("click", "country-fills", function(e) {
         if (e.features.length > 0) {
           var feature = e.features[0];
