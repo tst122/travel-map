@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Custom Mapbox Map</title>
+  <title>Interactive Map with Country Borders</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Mapbox GL JS -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
@@ -24,7 +24,7 @@
       bottom: 0;
       width: 100%;
     }
-    /* Base marker style */
+    /* Marker style with hover effect */
     .marker {
       background-color: #5a6bff;
       width: 16px;
@@ -57,7 +57,7 @@
       margin: 0;
       font-size: 14px;
     }
-    /* Search container style with transparency and blur */
+    /* Search container style with slight transparency and blur */
     #search-container {
       position: absolute;
       top: 20px;
@@ -86,7 +86,7 @@
     #search-box:focus {
       box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
     }
-    /* Side popup (click popup) style */
+    /* Side popup style */
     #side-popup {
       position: absolute;
       top: 20px;
@@ -120,7 +120,6 @@
     #side-popup a:hover {
       background: #005bb5;
     }
-    /* Country border layers will be styled via Mapbox layer styles below */
   </style>
 </head>
 <body>
@@ -131,17 +130,21 @@
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
-    // Replace with your Mapbox access token if needed.
-    mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN';
+    // Use your Mapbox access token (this is an example token)
+    mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
+    // Initialize the map using a standard Mapbox style.
     const map = new mapboxgl.Map({
       container: 'map',
-      style: 'mapbox://styles/sicko5/cm6k1juil010301qm2krq7o84',
+      style: 'mapbox://styles/mapbox/streets-v11',
       center: [-0.1276, 51.5072],
       zoom: 2
     });
+    
     const mapMarkers = [];
     const cityMarkers = [];
     let lockedCity = null;
+    
+    // Function to update the side popup (for city info)
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
@@ -157,6 +160,8 @@
         sidePopup.style.display = "none";
       }
     }
+    
+    // Helper: Update marker visibility based on zoom.
     function updateMarkerVisibility() {
       const zoom = map.getZoom();
       mapMarkers.forEach(marker => {
@@ -166,30 +171,38 @@
         el.style.display = (zoom >= min && zoom <= max) ? "block" : "none";
       });
     }
-    // Load markers from CSV via PapaParse
+    
+    // Load markers from CSV using PapaParse
     Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv", {
       download: true,
       header: true,
       complete: function (results) {
         results.data.forEach(markerData => {
           if (!markerData.lat || !markerData.lng) return;
+    
           const el = document.createElement("div");
           el.className = "marker";
+    
           const popupContent = `
             ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
             ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:#fff; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ""}
           `;
           const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false })
             .setHTML(popupContent);
+    
           const marker = new mapboxgl.Marker(el)
             .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
             .addTo(map);
+    
           marker.markerData = markerData;
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             cityMarkers.push(marker);
           }
+    
+          // Track pointer state for immediate popup behavior.
           let isOverMarker = false;
           let isOverPopup = false;
+    
           el.addEventListener("mouseenter", () => {
             isOverMarker = true;
             popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
@@ -204,6 +217,7 @@
               }
             });
           });
+    
           el.addEventListener("mouseleave", () => {
             isOverMarker = false;
             setTimeout(() => {
@@ -212,6 +226,7 @@
               }
             }, 0);
           });
+    
           el.addEventListener("click", () => {
             if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
               map.flyTo({
@@ -231,6 +246,8 @@
               updateSidePopup(null);
             }
           });
+    
+          // Set zoom filtering: non-city markers default to min zoom 12.
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             el.dataset.zoomMin = markerData.zoomMin || 0;
           } else {
@@ -238,12 +255,15 @@
           }
           el.dataset.zoomMax = markerData.zoomMax || 20;
           el.dataset.name = (markerData.name || "").toLowerCase();
+    
           mapMarkers.push(marker);
         });
         updateMarkerVisibility();
       }
     });
+    
     map.on("zoom", updateMarkerVisibility);
+    
     document.getElementById("search-box").addEventListener("input", function (e) {
       const searchTerm = e.target.value.toLowerCase();
       mapMarkers.forEach(marker => {
@@ -251,6 +271,7 @@
         marker.getElement().style.display = (!searchTerm || (name && name.includes(searchTerm))) ? "block" : "none";
       });
     });
+    
     map.on("moveend", () => {
       const zoom = map.getZoom();
       if (zoom < 12) {
@@ -283,7 +304,7 @@
       }
     });
     
-    // Add natural, interactive country borders using Mapbox's vector source
+    // Add natural, interactive country borders using Mapbox's vector tile source.
     map.on("load", function() {
       map.addSource("country-boundaries", {
         type: "vector",
@@ -334,5 +355,4 @@
   </script>
 </body>
 </html>
-
 
