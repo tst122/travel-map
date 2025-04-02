@@ -152,13 +152,14 @@
       }
     }
     
-    // Use your original Mapbox style and access token.
+    // Change the map's center and zoom so that one side shows North America and the other Europe.
+    // Centering on [-30,50] at zoom level 3 provides a transatlantic view.
     mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/sicko5/cm6k1juil010301qm2krq7o84',
-      center: [-0.1276, 51.5072],
-      zoom: 2
+      center: [-30, 50],
+      zoom: 3
     });
     
     const mapMarkers = [];
@@ -242,9 +243,9 @@
               if (!isOverMarker && !isOverPopup) {
                 popup.remove();
               }
-            }, 100); // 100 ms delay for responsiveness.
+            }, 100);
           });
-          // On marker click: stop propagation so country clicks aren't triggered, zoom in (zoom 14, speed 1.5) and update side popup.
+          // On marker click: stop propagation, zoom in (to zoom 14, faster) and update side popup.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             countryLocked = false;
@@ -323,11 +324,12 @@
     });
     
     /* Add interactive country boundaries using fill layers.
-       - Hover effect is enabled when zoom is at or below a threshold:
+       - Hover effect is enabled only when zoom is at or below a threshold:
          • For North America (ISO: USA, CAN, MEX), hover is enabled when zoom is ≤ 3.
          • For other regions, hover is enabled when zoom is ≤ 4.
        - Once a country is clicked, the hover effect is disabled via the countryLocked flag.
        - The mousemove event is throttled (20 ms) for performance.
+       - The "country-fills-highlight" layer is moved below symbol layers so that text and labels appear above it.
     */
     map.on("load", function() {
       map.addSource("country-boundaries", {
@@ -426,14 +428,15 @@
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
         }
       });
-      
-      // Reset countryLocked when clicking on empty space or a marker.
-      map.on("click", function(e) {
-        countryLocked = false;
-      });
-      
-      // IMPORTANT: Move the country hover layer ("country-fills-highlight")
-      // below the symbol layers so that any text or labels appear above it.
+    });
+    
+    // Reset countryLocked when clicking on empty space or a marker.
+    map.on("click", function(e) {
+      countryLocked = false;
+    });
+    
+    // IMPORTANT: Ensure country labels and other symbols appear above the hover layer.
+    map.on("styledata", function() {
       const layers = map.getStyle().layers;
       let firstSymbolId;
       for (let i = 0; i < layers.length; i++) {
