@@ -130,7 +130,7 @@
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
-    // Throttle function to limit execution frequency (used for mousemove).
+    // Throttle function to limit the frequency of execution (used for mousemove on country fills).
     function throttle(func, limit) {
       let lastFunc;
       let lastRan;
@@ -242,9 +242,9 @@
               if (!isOverMarker && !isOverPopup) {
                 popup.remove();
               }
-            }, 300); // 300 ms delay to allow clicking on "Explore"
+            }, 100); // Reduced delay (100 ms) for more responsiveness.
           });
-          // On marker click: stop propagation, zoom in (to zoom 14, faster) and update side popup.
+          // On marker click: prevent propagation, zoom in (to zoom 14, faster) and update side popup.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             countryLocked = false;
@@ -395,18 +395,17 @@
           map.getCanvas().style.cursor = "";
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
         }
-      }, 50));
+      }, 20)); // Reduced throttle limit (20 ms)
       
-      // On click within a country, zoom to its "mainland" bounds and lock the hover effect.
+      // On click within a country, zoom to its mainland bounds and lock the hover effect.
       map.on("click", "country-fills", function(e) {
         if (e.features.length > 0) {
           const feature = e.features[0];
           let targetFeature = feature;
-          // If the geometry is a MultiPolygon, find the polygon with the largest area.
+          // If the geometry is a MultiPolygon, select the polygon with the largest area.
           if (feature.geometry.type === "MultiPolygon") {
             let maxArea = 0;
             feature.geometry.coordinates.forEach(polygon => {
-              // polygon is an array of linear rings; create a polygon feature.
               const polyFeature = {
                 type: "Feature",
                 geometry: {
@@ -436,5 +435,4 @@
   </script>
 </body>
 </html>
-
 
