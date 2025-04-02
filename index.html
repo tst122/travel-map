@@ -110,7 +110,8 @@
   <div id="map"></div>
 
   <script>
-    mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
+    mapboxgl.accessToken =
+      'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
 
     const map = new mapboxgl.Map({
       container: 'map',
@@ -120,10 +121,10 @@
     });
 
     const mapMarkers = [];
-    const cityMarkers = [];  // Only markers flagged as cities.
-    let lockedCity = null;   // Holds city data when a city marker is clicked.
+    const cityMarkers = []; // Only markers flagged as cities.
+    let lockedCity = null;  // Holds city data when a city marker is clicked.
 
-    // Updated function: if a "popup" field exists, use it without duplicating the city name.
+    // If a "popup" field exists, we use it without repeating the city name.
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
@@ -131,149 +132,175 @@
         if (!data.popup) {
           content += `<h3>${data.name}</h3>`;
         }
-        content += data.popup ? `<div>${data.popup}</div>` : '';
-        content += data.link ? `<a href="${data.link}" target="_blank">Explore →</a>` : '';
+        content += data.popup ? `<div>${data.popup}</div>` : "";
+        content += data.link ? `<a href="${data.link}" target="_blank">Explore →</a>` : "";
         sidePopup.innerHTML = content;
-        sidePopup.style.display = 'block';
+        sidePopup.style.display = "block";
       } else {
-        sidePopup.style.display = 'none';
+        sidePopup.style.display = "none";
       }
     }
 
-    Papa.parse('https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv', {
-      download: true,
-      header: true,
-      complete: function(results) {
-        results.data.forEach((markerData) => {
-          if (!markerData.lat || !markerData.lng) return;
+    // Helper: Update marker visibility based on zoom.
+    function updateMarkerVisibility() {
+      const zoom = map.getZoom();
+      mapMarkers.forEach(marker => {
+        const el = marker.getElement();
+        const min = parseFloat(el.dataset.zoomMin);
+        const max = parseFloat(el.dataset.zoomMax);
+        el.style.display = (zoom >= min && zoom <= max) ? "block" : "none";
+      });
+    }
 
-          const el = document.createElement('div');
-          el.className = 'marker';
+    Papa.parse(
+      "https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv",
+      {
+        download: true,
+        header: true,
+        complete: function (results) {
+          results.data.forEach(markerData => {
+            if (!markerData.lat || !markerData.lng) return;
 
-          const popupContent = `
-            ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
-            ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:white; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ''}
-          `;
-          // Create a hover popup.
-          const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false })
-                        .setHTML(popupContent);
+            const el = document.createElement("div");
+            el.className = "marker";
 
-          const marker = new mapboxgl.Marker(el)
-            .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
-            .addTo(map);
+            const popupContent = `
+              ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
+              ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:white; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ""}
+            `;
+            // Create a popup that shows immediately.
+            const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false })
+              .setHTML(popupContent);
 
-          // Save marker data.
-          marker.markerData = markerData;
-          // If this marker is a city, push it into the cityMarkers array.
-          if (markerData.isCity && markerData.isCity.toLowerCase() === 'true') {
-            cityMarkers.push(marker);
-          }
+            const marker = new mapboxgl.Marker(el)
+              .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
+              .addTo(map);
 
-          let hideTimeout;
-          function attachPopupEvents() {
-            const popupEl = popup.getElement();
-            if (popupEl) {
-              popupEl.addEventListener('mouseenter', () => { clearTimeout(hideTimeout); });
-              popupEl.addEventListener('mouseleave', () => {
-                hideTimeout = setTimeout(() => { popup.remove(); }, 300);
+            // Store marker data.
+            marker.markerData = markerData;
+            // If this marker is a city, add it to the cityMarkers array.
+            if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
+              cityMarkers.push(marker);
+            }
+
+            // These flags help track pointer position.
+            let isOverMarker = false;
+            let isOverPopup = false;
+
+            // Show popup immediately on pointerenter.
+            el.addEventListener("mouseenter", () => {
+              isOverMarker = true;
+              popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
+              // Once the popup opens, attach events.
+              popup.once("open", () => {
+                const popupEl = popup.getElement();
+                if (popupEl) {
+                  popupEl.addEventListener("mouseenter", () => { isOverPopup = true; });
+                  popupEl.addEventListener("mouseleave", () => {
+                    isOverPopup = false;
+                    // Remove popup immediately if pointer is not over marker.
+                    if (!isOverMarker) {
+                      popup.remove();
+                    }
+                  });
+                }
               });
-            }
-          }
+            });
 
-          el.addEventListener('mouseenter', () => {
-            clearTimeout(hideTimeout);
-            popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
-            // Attach popup events as soon as the popup opens.
-            popup.once('open', attachPopupEvents);
-          });
+            el.addEventListener("mouseleave", () => {
+              isOverMarker = false;
+              // Remove popup immediately if pointer is not over popup.
+              setTimeout(() => {
+                if (!isOverMarker && !isOverPopup) {
+                  popup.remove();
+                }
+              }, 0);
+            });
 
-          el.addEventListener('mouseleave', () => {
-            hideTimeout = setTimeout(() => { popup.remove(); }, 300);
-          });
+            // On marker click: fly to location and, if it's a city, lock the side popup.
+            el.addEventListener("click", () => {
+              map.flyTo({
+                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+                zoom: 12,
+                speed: 0.8
+              });
+              if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
+                lockedCity = markerData;
+                updateSidePopup(markerData);
+              } else {
+                lockedCity = null;
+                updateSidePopup(null);
+              }
+            });
 
-          // On marker click: fly to location and lock side popup if it's a city.
-          el.addEventListener('click', () => {
-            map.flyTo({ center: [parseFloat(markerData.lng), parseFloat(markerData.lat)], zoom: 12, speed: 0.8 });
-            if (markerData.isCity && markerData.isCity.toLowerCase() === 'true') {
-              lockedCity = markerData;
-              updateSidePopup(markerData);
-            } else {
-              lockedCity = null;
-              updateSidePopup(null);
-            }
-          });
-
-          // Set zoom filtering data.
-          if (markerData.isCity && markerData.isCity.toLowerCase() === 'true') {
+            // For zoom filtering:
             // For city markers, use provided zoomMin or default to 0.
-            marker.getElement().dataset.zoomMin = markerData.zoomMin || 0;
-          } else {
-            // For non-city markers, default to a higher zoom (e.g. 12) so they don't show at low zoom.
-            marker.getElement().dataset.zoomMin = markerData.zoomMin || 12;
-          }
-          marker.getElement().dataset.zoomMax = markerData.zoomMax || 20;
-          marker.getElement().dataset.name = (markerData.name || '').toLowerCase();
-
-          mapMarkers.push(marker);
-        });
-
-        // Zoom filtering for markers.
-        map.on('zoom', () => {
-          const zoom = map.getZoom();
-          mapMarkers.forEach((marker) => {
-            const el = marker.getElement();
-            const min = parseFloat(el.dataset.zoomMin);
-            const max = parseFloat(el.dataset.zoomMax);
-            el.style.display = (zoom >= min && zoom <= max) ? 'block' : 'none';
-          });
-        });
-
-        // Search filtering.
-        document.getElementById('search-box').addEventListener('input', function(e) {
-          const searchTerm = e.target.value.toLowerCase();
-          mapMarkers.forEach((marker) => {
-            const name = marker.getElement().dataset.name;
-            marker.getElement().style.display = (!searchTerm || (name && name.includes(searchTerm))) ? 'block' : 'none';
-          });
-        });
-
-        // On map moveend, update the side popup for cities.
-        map.on('moveend', () => {
-          const zoom = map.getZoom();
-          if (zoom < 12) {
-            updateSidePopup(null);
-            lockedCity = null;
-            return;
-          }
-          // If a city is locked (clicked), keep showing its info.
-          if (lockedCity) {
-            updateSidePopup(lockedCity);
-            return;
-          }
-          // Compute the canvas center.
-          const canvasCenter = { x: map.getCanvas().width / 2, y: map.getCanvas().height / 2 };
-          let closestCity = null;
-          let minDist = Infinity;
-          for (let i = 0; i < cityMarkers.length; i++) {
-            const marker = cityMarkers[i];
-            const screenPos = map.project(marker.getLngLat());
-            const dx = screenPos.x - canvasCenter.x;
-            const dy = screenPos.y - canvasCenter.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < minDist) {
-              minDist = dist;
-              closestCity = marker;
+            // For non-city markers, default to 12.
+            if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
+              el.dataset.zoomMin = markerData.zoomMin || 0;
+            } else {
+              el.dataset.zoomMin = markerData.zoomMin || 12;
             }
-          }
-          if (closestCity && minDist < 100) {
-            updateSidePopup(closestCity.markerData);
-          } else {
-            updateSidePopup(null);
-          }
-        });
+            el.dataset.zoomMax = markerData.zoomMax || 20;
+            el.dataset.name = (markerData.name || "").toLowerCase();
+
+            mapMarkers.push(marker);
+          });
+
+          // Call zoom filtering once immediately.
+          updateMarkerVisibility();
+        }
+      }
+    );
+
+    // Update marker visibility on zoom.
+    map.on("zoom", updateMarkerVisibility);
+
+    // Search filtering.
+    document.getElementById("search-box").addEventListener("input", function (e) {
+      const searchTerm = e.target.value.toLowerCase();
+      mapMarkers.forEach(marker => {
+        const name = marker.getElement().dataset.name;
+        marker.getElement().style.display = (!searchTerm || (name && name.includes(searchTerm))) ? "block" : "none";
+      });
+    });
+
+    // On map moveend, update the side popup for city markers.
+    map.on("moveend", () => {
+      const zoom = map.getZoom();
+      if (zoom < 12) {
+        updateSidePopup(null);
+        lockedCity = null;
+        return;
+      }
+      // If a city is locked (clicked), keep showing its info.
+      if (lockedCity) {
+        updateSidePopup(lockedCity);
+        return;
+      }
+      // Compute the canvas center.
+      const canvasCenter = { x: map.getCanvas().width / 2, y: map.getCanvas().height / 2 };
+      let closestCity = null;
+      let minDist = Infinity;
+      for (let i = 0; i < cityMarkers.length; i++) {
+        const marker = cityMarkers[i];
+        const screenPos = map.project(marker.getLngLat());
+        const dx = screenPos.x - canvasCenter.x;
+        const dy = screenPos.y - canvasCenter.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < minDist) {
+          minDist = dist;
+          closestCity = marker;
+        }
+      }
+      if (closestCity && minDist < 100) {
+        updateSidePopup(closestCity.markerData);
+      } else {
+        updateSidePopup(null);
       }
     });
   </script>
 </body>
 </html>
+
 
