@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Custom Map with Interactive Countries & Points</title>
+  <title>Interactive Map Centered on North America & Europe</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Mapbox GL JS -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
@@ -57,7 +57,7 @@
       margin: 0;
       font-size: 14px;
     }
-    /* Search container style */
+    /* Search container style with transparency and blur */
     #search-container {
       position: absolute;
       top: 20px;
@@ -152,23 +152,22 @@
       }
     }
     
-    // Set the map's center so that North America is on one side and Europe on the other.
-    // Adjusted center [-30,50] and zoom 3 should show a transatlantic view.
+    // Set the map to be centered so that all of North America and Europe are visible.
+    // Center at [-20, 55] with zoom 3.5 is a good starting point.
     mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/sicko5/cm6k1juil010301qm2krq7o84',
-      center: [-30, 50],
-      zoom: 3
+      center: [-20, 55],
+      zoom: 3.5
     });
     
     const mapMarkers = [];
     const cityMarkers = [];
     let lockedCity = null;
-    // Flag to disable country hover effect when a country is clicked.
-    let countryLocked = false;
+    let countryLocked = false; // Disable country hover after a country is clicked.
     
-    // Function to update the side popup using marker data.
+    // Function to update the side popup with marker data.
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
@@ -218,7 +217,7 @@
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             cityMarkers.push(marker);
           }
-          // Hover popup behavior.
+          // Hover popup behavior for markers.
           let isOverMarker = false;
           let isOverPopup = false;
           el.addEventListener("mouseenter", () => {
@@ -242,9 +241,10 @@
               if (!isOverMarker && !isOverPopup) {
                 popup.remove();
               }
-            }, 100);
+            }, 100); // 100 ms delay for responsiveness.
           });
-          // On marker click: stop propagation, zoom in (zoom 14, speed 1.5) and update side popup.
+          // On marker click: stop propagation so country events aren't triggered,
+          // zoom in (to zoom 14, speed 1.5) and update side popup.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             countryLocked = false;
@@ -323,19 +323,19 @@
     });
     
     /* Add interactive country boundaries using fill layers.
-       - Hover effect is enabled when zoom is at or below:
-         • For North America (ISO: USA, CAN, MEX), hover is enabled when zoom is ≤ 3.
-         • For other regions, hover is enabled when zoom is ≤ 4.
-       - Once a country is clicked, the hover effect is disabled (countryLocked flag).
-       - The mousemove event is throttled (20 ms) for performance.
-       - The "country-fills-highlight" layer is moved below symbol layers so text appears above.
+       - The country hover effect is enabled when zoom is at or below:
+         • For North America (ISO: USA, CAN, MEX): zoom ≤ 3.
+         • For other regions: zoom ≤ 4.
+       - Once a country is clicked, the hover effect is disabled (via countryLocked).
+       - Mousemove is throttled (20 ms) for performance.
+       - The "country-fills-highlight" layer is moved below symbol layers so that labels remain above.
     */
     map.on("load", function() {
       map.addSource("country-boundaries", {
         type: "vector",
         url: "mapbox://mapbox.country-boundaries-v1"
       });
-      // Fill layer for country areas (invisible but interactive).
+      // Fill layer for country areas (invisible but interactive)
       map.addLayer({
         id: "country-fills",
         type: "fill",
@@ -377,7 +377,7 @@
       
       // Throttled mousemove to update country hover highlight.
       map.on("mousemove", throttle(function(e) {
-        // Determine threshold: for NA, disable hover if zoom > 3; for others, if zoom > 4.
+        // Determine threshold: for NA, enable hover if zoom ≤ 3; for others, if zoom ≤ 4.
         let threshold = 4;
         const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
         if (features.length > 0) {
@@ -428,11 +428,12 @@
       });
     });
     
+    // Reset countryLocked when clicking on empty space or a marker.
     map.on("click", function(e) {
       countryLocked = false;
     });
     
-    // Ensure country labels (symbols) appear above the hover highlight.
+    // Move the "country-fills-highlight" layer below symbol layers so that text is visible.
     map.on("styledata", function() {
       const layers = map.getStyle().layers;
       let firstSymbolId;
