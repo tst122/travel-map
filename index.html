@@ -24,7 +24,7 @@
       bottom: 0;
       width: 100%;
     }
-    /* Marker style with hover effect */
+    /* Marker style */
     .marker {
       background-color: #5a6bff;
       width: 16px;
@@ -124,13 +124,11 @@
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
-    // Throttle function (for country hover updates) with a limit of 10ms.
+    // Throttle function for performance
     function throttle(func, limit) {
-      let lastFunc;
-      let lastRan;
+      let lastFunc, lastRan;
       return function() {
-        const context = this;
-        const args = arguments;
+        const context = this, args = arguments;
         if (!lastRan) {
           func.apply(context, args);
           lastRan = Date.now();
@@ -146,7 +144,7 @@
       }
     }
     
-    // Set map center so that North America and Europe are both visible.
+    // Map settings: centered so that North America and Europe are visible.
     mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
     const map = new mapboxgl.Map({
       container: 'map',
@@ -158,9 +156,9 @@
     const mapMarkers = [];
     const cityMarkers = [];
     let lockedCity = null;
-    let countryLocked = false; // When true, country hover is disabled.
+    let countryLocked = false; // When true, disables country hover effect.
     
-    // Function to update side popup with marker data.
+    // Function to update side popup.
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
@@ -186,7 +184,7 @@
       });
     }
     
-    // Load CSV markers.
+    // Load markers from CSV.
     Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv", {
       download: true,
       header: true,
@@ -208,17 +206,16 @@
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             cityMarkers.push(marker);
           }
-          // Instant hover popup behavior for markers.
+          // Marker hover behavior: show popup instantly.
           el.addEventListener("mouseenter", () => {
-            countryLocked = false; // Reset country lock.
-            el.style.opacity = "1";  // Ensure marker is fully visible.
+            countryLocked = false; // Reset country lock when interacting with markers.
             popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
           });
           el.addEventListener("mouseleave", () => {
-            // Remove popup without delay.
-            popup.remove();
+            // Remove popup after 100ms delay.
+            setTimeout(() => { popup.remove(); }, 100);
           });
-          // On marker click: stop propagation, fly to marker, and update side popup.
+          // Marker click: stop propagation, fly to marker, and update side popup.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             countryLocked = false;
@@ -234,7 +231,7 @@
             }
             updateSidePopup(markerData);
           });
-          // Set zoom filtering.
+          // Zoom filtering: non-city markers default to min zoom 12.
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             el.dataset.zoomMin = markerData.zoomMin || 0;
           } else {
@@ -250,7 +247,7 @@
     
     map.on("zoom", updateMarkerVisibility);
     
-    document.getElementById("search-box").addEventListener("input", function (e) {
+    document.getElementById("search-box").addEventListener("input", function(e) {
       const searchTerm = e.target.value.toLowerCase();
       mapMarkers.forEach(marker => {
         const name = marker.getElement().dataset.name;
@@ -294,9 +291,9 @@
        - Hover effect is enabled when zoom is at or below:
          • For North America (ISO: USA, CAN, MEX): zoom ≤ 3.
          • For other regions: zoom ≤ 4.
-       - Once a country is clicked, the hover effect is locked.
+       - When a country is clicked, the largest polygon (assumed mainland) is used to zoom in quickly.
        - Mousemove is throttled (10 ms) for responsiveness.
-       - The highlight layer is moved below symbol layers.
+       - The highlight layer is moved behind symbol layers so that text/labels appear on top.
     */
     map.on("load", function() {
       map.addSource("country-boundaries", {
@@ -315,7 +312,7 @@
           "fill-opacity": 0
         }
       });
-      // Highlight layer for hover.
+      // Highlight layer for hover effect.
       map.addLayer({
         id: "country-fills-highlight",
         type: "fill",
@@ -327,7 +324,7 @@
         },
         filter: ["==", "iso_3166_1", ""]
       });
-      // Line layer for natural borders.
+      // Line layer for borders.
       map.addLayer({
         id: "country-borders",
         type: "line",
@@ -340,12 +337,12 @@
         }
       });
       
-      // List of North American country ISO codes.
+      // List of North American ISO codes.
       const naCountries = ["USA", "CAN", "MEX"];
       
       // Throttled mousemove to update the highlight.
       map.on("mousemove", throttle(function(e) {
-        // Set threshold: for NA, if zoom > 3 disable hover; for others, if zoom > 4 disable.
+        // Determine threshold: for NA, if zoom > 3 disable hover; for others, if zoom > 4 disable.
         let threshold = 4;
         const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
         if (features.length > 0) {
@@ -366,7 +363,7 @@
         }
       }, 10));
       
-      // On click within a country, zoom to its mainland bounds (largest polygon) quickly and lock hover.
+      // On click within a country, zoom to its largest polygon (assumed mainland) and lock hover.
       map.on("click", "country-fills", function(e) {
         if (e.features.length > 0) {
           const feature = e.features[0];
@@ -401,7 +398,7 @@
       countryLocked = false;
     });
     
-    // Ensure country highlight layer is below symbol layers.
+    // Move the country highlight layer below symbol layers so text appears on top.
     map.on("styledata", function() {
       const layers = map.getStyle().layers;
       let firstSymbolId;
@@ -418,3 +415,4 @@
   </script>
 </body>
 </html>
+
