@@ -94,49 +94,33 @@
         el.className = 'marker';
 
         const popupContent = `
-  ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
-  ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:white; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ''}
-`;
+          ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
+          ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:white; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ''}
+        `;
 
-const popup = new mapboxgl.Popup({ offset: 25 })
-  .setHTML(popupContent);
+        const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(popupContent);
+        const hoverPopup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false }).setText(markerData.name);
 
         const marker = new mapboxgl.Marker(el)
-  .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
-  .setPopup(popup)
-  .addTo(map);
+          .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
+          .setPopup(popup)
+          .addTo(map);
 
-// Hover popup with name only
-const hoverPopup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false })
-  .setText(markerData.name);
+        el.addEventListener('click', () => {
+          map.flyTo({ center: [parseFloat(markerData.lng), parseFloat(markerData.lat)], zoom: 12, speed: 0.8 });
+        });
 
-el.addEventListener('mouseenter', () => {
-  hoverPopup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
-});
+        el.addEventListener('mouseenter', () => {
+          hoverPopup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
+        });
 
-el.addEventListener('mouseleave', () => {
-  hoverPopup.remove();
-});
-
-el.addEventListener('click', () => {
-  map.flyTo({ center: [parseFloat(markerData.lng), parseFloat(markerData.lat)], zoom: 12, speed: 0.8 });
-});
+        el.addEventListener('mouseleave', () => {
+          hoverPopup.remove();
+        });
 
         marker.getElement().dataset.zoomMin = markerData.zoomMin || 0;
         marker.getElement().dataset.zoomMax = markerData.zoomMax || 20;
         marker.getElement().dataset.name = (markerData.name || '').toLowerCase();
-
-// Add hover popup for name only
-const hoverPopup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false })
-  .setText(markerData.name);
-
-el.addEventListener('mouseenter', () => {
-  hoverPopup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
-});
-
-el.addEventListener('mouseleave', () => {
-  hoverPopup.remove();
-});
 
         mapMarkers.push(marker);
       });
@@ -151,7 +135,16 @@ el.addEventListener('mouseleave', () => {
         });
       });
 
-      
+      document.getElementById('search-box').addEventListener('input', function(e) {
+        const searchTerm = e.target.value.toLowerCase();
+        mapMarkers.forEach((marker) => {
+          const name = marker.getElement().dataset.name;
+          if (!searchTerm || (name && name.includes(searchTerm))) {
+            marker.getElement().style.display = 'block';
+          } else {
+            marker.getElement().style.display = 'none';
+          }
+        });
       });
     }
   });
