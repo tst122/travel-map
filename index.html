@@ -22,7 +22,7 @@
       bottom: 0;
       width: 100%;
     }
-    /* Marker style with hover effect */
+    /* Base marker style */
     .marker {
       background-color: #5a6bff;
       width: 16px;
@@ -33,8 +33,16 @@
       box-shadow: 0 2px 5px rgba(0,0,0,0.3);
       transition: background-color 0.3s ease;
     }
+    /* Hover effect for normal markers */
     .marker:hover {
       background-color: #ff5722;
+    }
+    /* Country markers: use a different base color */
+    .marker.country {
+      background-color: #4caf50;
+    }
+    .marker.country:hover {
+      background-color: #388e3c;
     }
     /* Popup content style */
     .mapboxgl-popup-content {
@@ -129,19 +137,18 @@
   <div id="map"></div>
   <script>
     mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
-
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/sicko5/cm6k1juil010301qm2krq7o84',
       center: [-0.1276, 51.5072],
       zoom: 2
     });
-
     const mapMarkers = [];
-    const cityMarkers = [];  // Only markers flagged as cities.
-    let lockedCity = null;   // Holds city data when a city marker is clicked.
-
-    // Updated function: if a "popup" field exists, use it without repeating the city name.
+    const cityMarkers = [];   // Markers flagged as cities.
+    const countryMarkers = []; // Markers flagged as countries.
+    let lockedCity = null;    // Holds city data when a city marker is clicked.
+    
+    // Update the side popup (for city or country info) without duplicating names if a "popup" exists.
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
@@ -157,7 +164,7 @@
         sidePopup.style.display = "none";
       }
     }
-
+    
     // Helper: Update marker visibility based on zoom.
     function updateMarkerVisibility() {
       const zoom = map.getZoom();
@@ -168,36 +175,49 @@
         el.style.display = (zoom >= min && zoom <= max) ? "block" : "none";
       });
     }
-
+    
     Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv", {
       download: true,
       header: true,
       complete: function (results) {
         results.data.forEach(markerData => {
           if (!markerData.lat || !markerData.lng) return;
-
+    
           const el = document.createElement("div");
           el.className = "marker";
-
+    
+          // If this marker is a country, add an extra class.
+          if (markerData.isCountry && markerData.isCountry.toLowerCase() === "true") {
+            el.classList.add("country");
+          }
+    
           const popupContent = `
             ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
             ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:#fff; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ""}
           `;
+          // Create a hover popup.
           const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false })
             .setHTML(popupContent);
-
+    
           const marker = new mapboxgl.Marker(el)
             .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
             .addTo(map);
-
+    
+          // Save marker data.
           marker.markerData = markerData;
+          // Separate markers by type.
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             cityMarkers.push(marker);
           }
-
+          if (markerData.isCountry && markerData.isCountry.toLowerCase() === "true") {
+            countryMarkers.push(marker);
+          }
+    
+          // Flags to track pointer state.
           let isOverMarker = false;
           let isOverPopup = false;
-
+    
+          // Show popup immediately on pointerenter.
           el.addEventListener("mouseenter", () => {
             isOverMarker = true;
             popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
@@ -212,7 +232,7 @@
               }
             });
           });
-
+    
           el.addEventListener("mouseleave", () => {
             isOverMarker = false;
             setTimeout(() => {
@@ -221,38 +241,63 @@
               }
             }, 0);
           });
-
+    
+          // On marker click, adjust behavior based on type.
           el.addEventListener("click", () => {
-            map.flyTo({
-              center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
-              zoom: 12,
-              speed: 0.8
-            });
-            if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
+            // If it's a country marker, zoom into country-level (e.g., zoom 5).
+            if (markerData.isCountry && markerData.isCountry.toLowerCase() === "true") {
+              map.flyTo({
+                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+                zoom: 5,
+                speed: 0.8
+              });
+              // Optionally update the side popup with country info.
+              updateSidePopup(markerData);
+              lockedCity = null;
+            }
+            // Else if it's a city marker, zoom in closer (e.g., zoom 12) and lock the side popup.
+            else if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
+              map.flyTo({
+                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+                zoom: 12,
+                speed: 0.8
+              });
               lockedCity = markerData;
               updateSidePopup(markerData);
-            } else {
+            }
+            // Otherwise, for normal markers, zoom in (zoom 12) without locking a popup.
+            else {
+              map.flyTo({
+                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+                zoom: 12,
+                speed: 0.8
+              });
               lockedCity = null;
               updateSidePopup(null);
             }
           });
-
+    
+          // Set zoom filtering data.
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             el.dataset.zoomMin = markerData.zoomMin || 0;
           } else {
+            // For non-city markers, default minimum zoom is 12.
             el.dataset.zoomMin = markerData.zoomMin || 12;
           }
           el.dataset.zoomMax = markerData.zoomMax || 20;
           el.dataset.name = (markerData.name || "").toLowerCase();
-
+    
           mapMarkers.push(marker);
         });
+        // Update marker visibility immediately after loading.
         updateMarkerVisibility();
       }
     });
-
+    
+    // Update marker visibility on zoom.
     map.on("zoom", updateMarkerVisibility);
-
+    
+    // Search filtering.
     document.getElementById("search-box").addEventListener("input", function (e) {
       const searchTerm = e.target.value.toLowerCase();
       mapMarkers.forEach(marker => {
@@ -260,7 +305,8 @@
         marker.getElement().style.display = (!searchTerm || (name && name.includes(searchTerm))) ? "block" : "none";
       });
     });
-
+    
+    // On map moveend, update the side popup for city markers.
     map.on("moveend", () => {
       const zoom = map.getZoom();
       if (zoom < 12) {
@@ -295,4 +341,3 @@
   </script>
 </body>
 </html>
-
