@@ -35,7 +35,6 @@
       box-shadow: 0 2px 5px rgba(0,0,0,0.3);
       transition: background-color 0.3s ease;
     }
-    /* Marker hover effect */
     .marker:hover {
       background-color: #ff5722;
     }
@@ -58,7 +57,7 @@
       margin: 0;
       font-size: 14px;
     }
-    /* Search container style */
+    /* Search container style with transparency and blur */
     #search-container {
       position: absolute;
       top: 20px;
@@ -87,7 +86,7 @@
     #search-box:focus {
       box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
     }
-    /* Side popup style */
+    /* Side popup (click popup) style */
     #side-popup {
       position: absolute;
       top: 20px;
@@ -121,7 +120,7 @@
     #side-popup a:hover {
       background: #005bb5;
     }
-    /* Country border layer will be styled via Mapbox layer styles below */
+    /* Country border layers will be styled via Mapbox layer styles below */
   </style>
 </head>
 <body>
@@ -132,20 +131,17 @@
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
-    mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
-
+    // Replace with your Mapbox access token if needed.
+    mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN';
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/sicko5/cm6k1juil010301qm2krq7o84',
       center: [-0.1276, 51.5072],
       zoom: 2
     });
-
     const mapMarkers = [];
-    const cityMarkers = [];   // Markers flagged as cities.
-    let lockedCity = null;    // Holds city data when a city marker is clicked.
-
-    // Function to update the side popup (for city info)
+    const cityMarkers = [];
+    let lockedCity = null;
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
@@ -161,8 +157,6 @@
         sidePopup.style.display = "none";
       }
     }
-
-    // Helper: Update marker visibility based on zoom.
     function updateMarkerVisibility() {
       const zoom = map.getZoom();
       mapMarkers.forEach(marker => {
@@ -172,38 +166,30 @@
         el.style.display = (zoom >= min && zoom <= max) ? "block" : "none";
       });
     }
-
-    // Load markers from CSV using PapaParse
+    // Load markers from CSV via PapaParse
     Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv", {
       download: true,
       header: true,
       complete: function (results) {
         results.data.forEach(markerData => {
           if (!markerData.lat || !markerData.lng) return;
-
           const el = document.createElement("div");
           el.className = "marker";
-
           const popupContent = `
             ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
             ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:#fff; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ""}
           `;
           const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false })
             .setHTML(popupContent);
-
           const marker = new mapboxgl.Marker(el)
             .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
             .addTo(map);
-
           marker.markerData = markerData;
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             cityMarkers.push(marker);
           }
-
-          // Track pointer state for instant popup behavior.
           let isOverMarker = false;
           let isOverPopup = false;
-
           el.addEventListener("mouseenter", () => {
             isOverMarker = true;
             popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
@@ -227,7 +213,6 @@
             }, 0);
           });
           el.addEventListener("click", () => {
-            // For city markers, zoom in closer and lock side popup.
             if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
               map.flyTo({
                 center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
@@ -236,9 +221,7 @@
               });
               lockedCity = markerData;
               updateSidePopup(markerData);
-            }
-            // For normal markers, zoom in to level 12 without locking popup.
-            else {
+            } else {
               map.flyTo({
                 center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
                 zoom: 12,
@@ -248,7 +231,6 @@
               updateSidePopup(null);
             }
           });
-          // Set zoom filtering: non-city markers default to min zoom 12.
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             el.dataset.zoomMin = markerData.zoomMin || 0;
           } else {
@@ -256,15 +238,12 @@
           }
           el.dataset.zoomMax = markerData.zoomMax || 20;
           el.dataset.name = (markerData.name || "").toLowerCase();
-
           mapMarkers.push(marker);
         });
         updateMarkerVisibility();
       }
     });
-
     map.on("zoom", updateMarkerVisibility);
-
     document.getElementById("search-box").addEventListener("input", function (e) {
       const searchTerm = e.target.value.toLowerCase();
       mapMarkers.forEach(marker => {
@@ -272,7 +251,6 @@
         marker.getElement().style.display = (!searchTerm || (name && name.includes(searchTerm))) ? "block" : "none";
       });
     });
-
     map.on("moveend", () => {
       const zoom = map.getZoom();
       if (zoom < 12) {
@@ -304,58 +282,57 @@
         updateSidePopup(null);
       }
     });
-
-    /* Add Country Borders as a GeoJSON layer – not as markers */
+    
+    // Add natural, interactive country borders using Mapbox's vector source
     map.on("load", function() {
-      // Add a GeoJSON source for countries.
-      map.addSource("countries", {
-        type: "geojson",
-        data: "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json"
+      map.addSource("country-boundaries", {
+        type: "vector",
+        url: "mapbox://mapbox.country-boundaries-v1"
       });
-      // Add a layer to display the country borders.
       map.addLayer({
-        id: "countries-layer",
+        id: "country-borders",
         type: "line",
-        source: "countries",
+        source: "country-boundaries",
+        "source-layer": "country_boundaries",
         layout: {},
         paint: {
-          "line-color": "#888",
+          "line-color": "#aaa",
           "line-width": 1
         }
       });
-      // Add a layer for highlighting the hovered country border.
       map.addLayer({
-        id: "countries-highlight",
+        id: "country-borders-highlight",
         type: "line",
-        source: "countries",
+        source: "country-boundaries",
+        "source-layer": "country_boundaries",
         layout: {},
         paint: {
           "line-color": "#f00",
-          "line-width": 3
+          "line-width": 2
         },
-        filter: ["==", "ADMIN", ""]
+        filter: ["==", "iso_3166_1", ""]
       });
-      // When the mouse moves over the country borders, highlight the country.
-      map.on("mousemove", "countries-layer", function(e) {
+      map.on("mousemove", "country-borders", function(e) {
         map.getCanvas().style.cursor = "pointer";
         if (e.features.length > 0) {
           var feature = e.features[0];
-          map.setFilter("countries-highlight", ["==", "ADMIN", feature.properties.ADMIN]);
+          map.setFilter("country-borders-highlight", ["==", "iso_3166_1", feature.properties.iso_3166_1]);
         }
       });
-      map.on("mouseleave", "countries-layer", function() {
+      map.on("mouseleave", "country-borders", function() {
         map.getCanvas().style.cursor = "";
-        map.setFilter("countries-highlight", ["==", "ADMIN", ""]);
+        map.setFilter("country-borders-highlight", ["==", "iso_3166_1", ""]);
       });
-      // On click, zoom to the country's bounds.
-      map.on("click", "countries-layer", function(e) {
-        var feature = e.features[0];
-        // Compute the bounding box for the clicked country using Turf.js.
-        var bbox = turf.bbox(feature);
-        map.fitBounds(bbox, { padding: 20 });
+      map.on("click", "country-borders", function(e) {
+        if (e.features.length > 0) {
+          var feature = e.features[0];
+          var bbox = turf.bbox(feature);
+          map.fitBounds(bbox, { padding: 20 });
+        }
       });
     });
   </script>
 </body>
 </html>
+
 
