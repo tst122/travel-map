@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Interactive Map Centered on North America & Europe</title>
+  <title>Interactive Map – North America & Europe</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Mapbox GL JS -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
@@ -24,7 +24,7 @@
       bottom: 0;
       width: 100%;
     }
-    /* Marker style with hover effect */
+    /* Marker style */
     .marker {
       background-color: #5a6bff;
       width: 16px;
@@ -57,7 +57,7 @@
       margin: 0;
       font-size: 14px;
     }
-    /* Search container style with transparency and blur */
+    /* Search container style */
     #search-container {
       position: absolute;
       top: 20px;
@@ -130,7 +130,7 @@
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
-    // Throttle function (for country hover updates)
+    // Throttle function to limit execution frequency (used for country hover updates)
     function throttle(func, limit) {
       let lastFunc;
       let lastRan;
@@ -152,8 +152,8 @@
       }
     }
     
-    // Set the map to be centered so that all of North America and Europe are visible.
-    // Center at [-20, 55] with zoom 3.5 is a good starting point.
+    // Set the map so that most of North America and Europe are visible.
+    // Centering at [-20,55] with zoom 3.5 provides a transatlantic view.
     mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
     const map = new mapboxgl.Map({
       container: 'map',
@@ -165,9 +165,10 @@
     const mapMarkers = [];
     const cityMarkers = [];
     let lockedCity = null;
-    let countryLocked = false; // Disable country hover after a country is clicked.
+    // Flag to disable country hover effect after a country is clicked.
+    let countryLocked = false;
     
-    // Function to update the side popup with marker data.
+    // Function to update the side popup using marker data.
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
@@ -241,10 +242,9 @@
               if (!isOverMarker && !isOverPopup) {
                 popup.remove();
               }
-            }, 100); // 100 ms delay for responsiveness.
+            }, 100);
           });
-          // On marker click: stop propagation so country events aren't triggered,
-          // zoom in (to zoom 14, speed 1.5) and update side popup.
+          // On marker click: stop propagation, zoom in (to zoom 14 at speed 1.5) and update side popup.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             countryLocked = false;
@@ -323,12 +323,12 @@
     });
     
     /* Add interactive country boundaries using fill layers.
-       - The country hover effect is enabled when zoom is at or below:
-         • For North America (ISO: USA, CAN, MEX): zoom ≤ 3.
+       - The hover effect is enabled when zoom is at or below:
+         • For North America (USA, CAN, MEX): zoom ≤ 3.
          • For other regions: zoom ≤ 4.
-       - Once a country is clicked, the hover effect is disabled (via countryLocked).
+       - Once a country is clicked, the hover effect is disabled (countryLocked flag).
        - Mousemove is throttled (20 ms) for performance.
-       - The "country-fills-highlight" layer is moved below symbol layers so that labels remain above.
+       - The "country-fills-highlight" layer is moved below symbol layers so text appears above.
     */
     map.on("load", function() {
       map.addSource("country-boundaries", {
@@ -428,12 +428,12 @@
       });
     });
     
-    // Reset countryLocked when clicking on empty space or a marker.
+    // Reset countryLocked when clicking on empty space.
     map.on("click", function(e) {
       countryLocked = false;
     });
     
-    // Move the "country-fills-highlight" layer below symbol layers so that text is visible.
+    // Move the country highlight layer below symbol layers so text/labels are on top.
     map.on("styledata", function() {
       const layers = map.getStyle().layers;
       let firstSymbolId;
