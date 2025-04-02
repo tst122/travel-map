@@ -121,9 +121,9 @@
 
     const mapMarkers = [];
     const cityMarkers = [];  // Only markers flagged as cities.
-    let lockedCity = null;   // Holds city marker data when a city is clicked.
+    let lockedCity = null;   // Holds city data when a city marker is clicked.
 
-    // Updated function: if a popup field is provided, use that instead of repeating the city name.
+    // Updated function: if a "popup" field exists, use it without duplicating the city name.
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
@@ -154,7 +154,7 @@
             ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
             ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:white; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ''}
           `;
-          // Create a hover popup (disappears on mouseleave)
+          // Create a hover popup.
           const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false })
                         .setHTML(popupContent);
 
@@ -162,7 +162,7 @@
             .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
             .addTo(map);
 
-          // Store marker data.
+          // Save marker data.
           marker.markerData = markerData;
           // If this marker is a city, push it into the cityMarkers array.
           if (markerData.isCity && markerData.isCity.toLowerCase() === 'true') {
@@ -183,14 +183,15 @@
           el.addEventListener('mouseenter', () => {
             clearTimeout(hideTimeout);
             popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
-            setTimeout(attachPopupEvents, 50);
+            // Attach popup events as soon as the popup opens.
+            popup.once('open', attachPopupEvents);
           });
 
           el.addEventListener('mouseleave', () => {
             hideTimeout = setTimeout(() => { popup.remove(); }, 300);
           });
 
-          // On marker click: fly to the location and lock the side popup if it's a city.
+          // On marker click: fly to location and lock side popup if it's a city.
           el.addEventListener('click', () => {
             map.flyTo({ center: [parseFloat(markerData.lng), parseFloat(markerData.lat)], zoom: 12, speed: 0.8 });
             if (markerData.isCity && markerData.isCity.toLowerCase() === 'true') {
@@ -203,7 +204,13 @@
           });
 
           // Set zoom filtering data.
-          marker.getElement().dataset.zoomMin = markerData.zoomMin || 0;
+          if (markerData.isCity && markerData.isCity.toLowerCase() === 'true') {
+            // For city markers, use provided zoomMin or default to 0.
+            marker.getElement().dataset.zoomMin = markerData.zoomMin || 0;
+          } else {
+            // For non-city markers, default to a higher zoom (e.g. 12) so they don't show at low zoom.
+            marker.getElement().dataset.zoomMin = markerData.zoomMin || 12;
+          }
           marker.getElement().dataset.zoomMax = markerData.zoomMax || 20;
           marker.getElement().dataset.name = (markerData.name || '').toLowerCase();
 
@@ -238,7 +245,7 @@
             lockedCity = null;
             return;
           }
-          // If a city is locked, keep showing its info.
+          // If a city is locked (clicked), keep showing its info.
           if (lockedCity) {
             updateSidePopup(lockedCity);
             return;
@@ -269,3 +276,4 @@
   </script>
 </body>
 </html>
+
