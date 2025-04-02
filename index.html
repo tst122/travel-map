@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Interactive Map – North America & Europe</title>
+  <title>Interactive Map – NA & Europe</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Mapbox GL JS -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
@@ -15,7 +15,7 @@
     body {
       margin: 0;
       padding: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-family: sans-serif;
       background: #f0f2f5;
     }
     #map {
@@ -33,24 +33,24 @@
       cursor: pointer;
       border: 2px solid white;
       box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-      transition: background-color 0.3s ease;
+      transition: background-color 0.2s ease;
     }
     .marker:hover {
       background-color: #ff5722;
     }
     /* Popup content style */
     .mapboxgl-popup-content {
-      padding: 15px;
-      border-radius: 8px;
+      padding: 8px;
+      border-radius: 6px;
       background: #fff;
       color: #333;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-      border: 1px solid #eee;
-      transition: all 0.2s ease;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      border: 1px solid #ddd;
+      transition: opacity 0.2s ease;
     }
     .mapboxgl-popup-content h3 {
-      margin: 0 0 5px;
-      font-size: 18px;
+      margin: 0 0 4px;
+      font-size: 16px;
       color: #0077ff;
     }
     .mapboxgl-popup-content p {
@@ -66,19 +66,19 @@
       z-index: 10;
       background: rgba(255,255,255,0.85);
       backdrop-filter: blur(4px);
-      padding: 10px 15px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      border: 1px solid #ddd;
+      padding: 8px 12px;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      border: 1px solid #ccc;
     }
     #search-box {
-      width: 300px;
-      padding: 10px;
-      font-size: 16px;
+      width: 280px;
+      padding: 8px;
+      font-size: 14px;
       border: none;
       outline: none;
       background: #f9f9f9;
-      border-radius: 8px;
+      border-radius: 6px;
       box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
     }
     /* Side popup style */
@@ -87,44 +87,40 @@
       top: 20px;
       right: 20px;
       width: 250px;
-      background: linear-gradient(145deg, #ffffff, #f9f9f9);
-      border-radius: 10px;
-      padding: 15px;
-      box-shadow: 0 6px 15px rgba(0,0,0,0.15);
+      background: #fff;
+      border-radius: 6px;
+      padding: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
       display: none;
       z-index: 11;
       border: 1px solid #ccc;
-      transition: opacity 0.2s ease, transform 0.2s ease;
     }
     #side-popup h3 {
-      margin: 0 0 5px;
+      margin: 0 0 4px;
+      font-size: 18px;
       color: #0077ff;
-      font-size: 20px;
     }
     #side-popup a {
       display: inline-block;
-      margin-top: 10px;
-      padding: 8px 14px;
+      margin-top: 8px;
+      padding: 6px 10px;
       background: #0077ff;
       color: #fff;
-      border-radius: 6px;
+      border-radius: 4px;
       text-decoration: none;
-      font-weight: bold;
-      transition: background 0.2s;
+      font-size: 14px;
     }
-    #side-popup a:hover {
-      background: #005bb5;
-    }
+    #side-popup a:hover { background: #005bb5; }
   </style>
 </head>
 <body>
   <div id="search-container">
-    <input type="text" id="search-box" placeholder="🔍 Search locations...">
+    <input type="text" id="search-box" placeholder="Search locations...">
   </div>
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
-    // Throttle function for performance
+    // Throttle helper function (limit to 10ms)
     function throttle(func, limit) {
       let lastFunc, lastRan;
       return function() {
@@ -144,7 +140,7 @@
       }
     }
     
-    // Map settings: centered so that North America and Europe are visible.
+    // Initialize the map so that North America and Europe are visible.
     mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
     const map = new mapboxgl.Map({
       container: 'map',
@@ -156,31 +152,31 @@
     const mapMarkers = [];
     const cityMarkers = [];
     let lockedCity = null;
-    let countryLocked = false; // When true, disables country hover effect.
+    let countryLocked = false; // When true, country hover effect is disabled.
     
-    // Function to update side popup.
+    // Update side popup based on marker data.
     function updateSidePopup(data) {
-      const sidePopup = document.getElementById('side-popup');
+      const sp = document.getElementById('side-popup');
       if (data) {
-        let content = "";
-        if (!data.popup) { content += `<h3>${data.name}</h3>`; }
-        content += data.popup ? `<div>${data.popup}</div>` : "";
-        content += data.link ? `<a href="${data.link}" target="_blank">Explore →</a>` : "";
-        sidePopup.innerHTML = content;
-        sidePopup.style.display = "block";
+        let html = "";
+        if (!data.popup) { html += `<h3>${data.name}</h3>`; }
+        html += data.popup ? `<div>${data.popup}</div>` : "";
+        html += data.link ? `<a href="${data.link}" target="_blank">Explore →</a>` : "";
+        sp.innerHTML = html;
+        sp.style.display = "block";
       } else {
-        sidePopup.style.display = "none";
+        sp.style.display = "none";
       }
     }
     
-    // Update marker visibility based on zoom.
+    // Update marker visibility.
     function updateMarkerVisibility() {
-      const zoom = map.getZoom();
+      const z = map.getZoom();
       mapMarkers.forEach(marker => {
         const el = marker.getElement();
         const min = parseFloat(el.dataset.zoomMin);
         const max = parseFloat(el.dataset.zoomMax);
-        el.style.display = (zoom >= min && zoom <= max) ? "block" : "none";
+        el.style.display = (z >= min && z <= max) ? "block" : "none";
       });
     }
     
@@ -189,56 +185,49 @@
       download: true,
       header: true,
       complete: function(results) {
-        results.data.forEach(markerData => {
-          if (!markerData.lat || !markerData.lng) return;
+        results.data.forEach(data => {
+          if (!data.lat || !data.lng) return;
           const el = document.createElement("div");
           el.className = "marker";
-          const popupContent = `
-            ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
-            ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:#fff; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ""}
-          `;
+          const popupHTML = data.popup ? `<div>${data.popup}</div>` : `<h3>${data.name}</h3>`;
+          const linkHTML = data.link ? `<p style="margin-top:6px;"><a href="${data.link}" target="_blank">Explore →</a></p>` : "";
           const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false })
-            .setHTML(popupContent);
+                          .setHTML(popupHTML + linkHTML);
           const marker = new mapboxgl.Marker(el)
-            .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
-            .addTo(map);
-          marker.markerData = markerData;
-          if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
+                          .setLngLat([parseFloat(data.lng), parseFloat(data.lat)])
+                          .addTo(map);
+          marker.markerData = data;
+          if (data.isCity && data.isCity.toLowerCase() === "true") {
             cityMarkers.push(marker);
           }
-          // Marker hover behavior: show popup instantly.
+          // Marker hover: show popup immediately.
           el.addEventListener("mouseenter", () => {
-            countryLocked = false; // Reset country lock when interacting with markers.
-            popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
+            countryLocked = false; // Reset country lock
+            popup.setLngLat([parseFloat(data.lng), parseFloat(data.lat)]).addTo(map);
           });
           el.addEventListener("mouseleave", () => {
-            // Remove popup after 100ms delay.
-            setTimeout(() => { popup.remove(); }, 100);
+            popup.remove();
           });
-          // Marker click: stop propagation, fly to marker, and update side popup.
+          // Marker click: stop propagation, fly to marker, update side popup.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             countryLocked = false;
             map.flyTo({
-              center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+              center: [parseFloat(data.lng), parseFloat(data.lat)],
               zoom: 14,
               speed: 2
             });
-            if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
-              lockedCity = markerData;
-            } else {
-              lockedCity = null;
-            }
-            updateSidePopup(markerData);
+            lockedCity = (data.isCity && data.isCity.toLowerCase() === "true") ? data : null;
+            updateSidePopup(data);
           });
-          // Zoom filtering: non-city markers default to min zoom 12.
-          if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
-            el.dataset.zoomMin = markerData.zoomMin || 0;
+          // Zoom filtering.
+          if(data.isCity && data.isCity.toLowerCase() === "true") {
+            el.dataset.zoomMin = data.zoomMin || 0;
           } else {
-            el.dataset.zoomMin = markerData.zoomMin || 12;
+            el.dataset.zoomMin = data.zoomMin || 12;
           }
-          el.dataset.zoomMax = markerData.zoomMax || 20;
-          el.dataset.name = (markerData.name || "").toLowerCase();
+          el.dataset.zoomMax = data.zoomMax || 20;
+          el.dataset.name = (data.name || "").toLowerCase();
           mapMarkers.push(marker);
         });
         updateMarkerVisibility();
@@ -248,53 +237,29 @@
     map.on("zoom", updateMarkerVisibility);
     
     document.getElementById("search-box").addEventListener("input", function(e) {
-      const searchTerm = e.target.value.toLowerCase();
+      const term = e.target.value.toLowerCase();
       mapMarkers.forEach(marker => {
         const name = marker.getElement().dataset.name;
-        marker.getElement().style.display = (!searchTerm || (name && name.includes(searchTerm))) ? "block" : "none";
+        marker.getElement().style.display = (!term || (name && name.includes(term))) ? "block" : "none";
       });
     });
     
     map.on("moveend", () => {
-      const zoom = map.getZoom();
-      if (zoom < 12) {
-        updateSidePopup(null);
-        lockedCity = null;
-        return;
-      }
-      if (lockedCity) {
-        updateSidePopup(lockedCity);
-        return;
-      }
-      const canvasCenter = { x: map.getCanvas().width / 2, y: map.getCanvas().height / 2 };
-      let closestCity = null;
-      let minDist = Infinity;
-      for (let i = 0; i < cityMarkers.length; i++) {
-        const marker = cityMarkers[i];
-        const screenPos = map.project(marker.getLngLat());
-        const dx = screenPos.x - canvasCenter.x;
-        const dy = screenPos.y - canvasCenter.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < minDist) {
-          minDist = dist;
-          closestCity = marker;
-        }
-      }
-      if (closestCity && minDist < 100) {
-        updateSidePopup(closestCity.markerData);
-      } else {
-        updateSidePopup(null);
-      }
+      const z = map.getZoom();
+      if(z < 12) { updateSidePopup(null); lockedCity = null; return; }
+      if(lockedCity) { updateSidePopup(lockedCity); return; }
+      const center = { x: map.getCanvas().width/2, y: map.getCanvas().height/2 };
+      let closest = null, minD = Infinity;
+      cityMarkers.forEach(marker => {
+        const pos = map.project(marker.getLngLat());
+        const d = Math.sqrt(Math.pow(pos.x - center.x,2) + Math.pow(pos.y - center.y,2));
+        if(d < minD) { minD = d; closest = marker; }
+      });
+      if(closest && minD < 100) { updateSidePopup(closest.markerData); }
+      else { updateSidePopup(null); }
     });
     
-    /* Add interactive country boundaries using fill layers.
-       - Hover effect is enabled when zoom is at or below:
-         • For North America (ISO: USA, CAN, MEX): zoom ≤ 3.
-         • For other regions: zoom ≤ 4.
-       - When a country is clicked, the largest polygon (assumed mainland) is used to zoom in quickly.
-       - Mousemove is throttled (10 ms) for responsiveness.
-       - The highlight layer is moved behind symbol layers so that text/labels appear on top.
-    */
+    /* Country boundaries via fill layers */
     map.on("load", function() {
       map.addSource("country-boundaries", {
         type: "vector",
@@ -324,7 +289,7 @@
         },
         filter: ["==", "iso_3166_1", ""]
       });
-      // Line layer for borders.
+      // Border line layer.
       map.addLayer({
         id: "country-borders",
         type: "line",
@@ -338,54 +303,43 @@
       });
       
       // List of North American ISO codes.
-      const naCountries = ["USA", "CAN", "MEX"];
+      const na = ["USA", "CAN", "MEX"];
       
-      // Throttled mousemove to update the highlight.
+      // Throttled mousemove for country hover highlight.
       map.on("mousemove", throttle(function(e) {
-        // Determine threshold: for NA, if zoom > 3 disable hover; for others, if zoom > 4 disable.
-        let threshold = 4;
-        const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
-        if (features.length > 0) {
-          const feature = features[0];
-          if (naCountries.includes(feature.properties.iso_3166_1)) {
-            threshold = 3;
-          }
-          if (map.getZoom() > threshold || countryLocked) {
+        let threshold = 4; // default for non-NA.
+        const feats = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
+        if(feats.length > 0) {
+          const feat = feats[0];
+          if(na.includes(feat.properties.iso_3166_1)) { threshold = 3; }
+          if(map.getZoom() > threshold || countryLocked) {
             map.getCanvas().style.cursor = "";
             map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
             return;
           }
           map.getCanvas().style.cursor = "pointer";
-          map.setFilter("country-fills-highlight", ["==", "iso_3166_1", feature.properties.iso_3166_1]);
-        } else {
+          map.setFilter("country-fills-highlight", ["==", "iso_3166_1", feat.properties.iso_3166_1]);
+        }
+        else {
           map.getCanvas().style.cursor = "";
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
         }
       }, 10));
       
-      // On click within a country, zoom to its largest polygon (assumed mainland) and lock hover.
+      // On country click, zoom to its mainland (largest polygon) quickly and lock hover.
       map.on("click", "country-fills", function(e) {
-        if (e.features.length > 0) {
-          const feature = e.features[0];
-          let targetFeature = feature;
-          if (feature.geometry.type === "MultiPolygon") {
-            let maxArea = 0;
-            feature.geometry.coordinates.forEach(polygon => {
-              const polyFeature = {
-                type: "Feature",
-                geometry: {
-                  type: "Polygon",
-                  coordinates: polygon
-                }
-              };
-              const area = turf.area(polyFeature);
-              if (area > maxArea) {
-                maxArea = area;
-                targetFeature = polyFeature;
-              }
+        if(e.features.length > 0) {
+          const feat = e.features[0];
+          let target = feat;
+          if(feat.geometry.type === "MultiPolygon") {
+            let maxA = 0;
+            feat.geometry.coordinates.forEach(polygon => {
+              const poly = { type: "Feature", geometry: { type: "Polygon", coordinates: polygon } };
+              const area = turf.area(poly);
+              if(area > maxA) { maxA = area; target = poly; }
             });
           }
-          const bbox = turf.bbox(targetFeature);
+          const bbox = turf.bbox(target);
           map.fitBounds(bbox, { padding: 20, duration: 300 });
           countryLocked = true;
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
@@ -393,24 +347,16 @@
       });
     });
     
-    // Reset countryLocked when clicking on empty space.
-    map.on("click", function(e) {
-      countryLocked = false;
-    });
+    map.on("click", function() { countryLocked = false; });
     
-    // Move the country highlight layer below symbol layers so text appears on top.
+    // Ensure country highlight layer is below symbol layers.
     map.on("styledata", function() {
       const layers = map.getStyle().layers;
-      let firstSymbolId;
-      for (let i = 0; i < layers.length; i++) {
-        if (layers[i].type === "symbol") {
-          firstSymbolId = layers[i].id;
-          break;
-        }
+      let sym;
+      for(let i = 0; i < layers.length; i++) {
+        if(layers[i].type === "symbol") { sym = layers[i].id; break; }
       }
-      if (firstSymbolId) {
-        map.moveLayer("country-fills-highlight", firstSymbolId);
-      }
+      if(sym) { map.moveLayer("country-fills-highlight", sym); }
     });
   </script>
 </body>
