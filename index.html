@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Interactive Map with Country Hover Lock</title>
+  <title>Custom Map with Interactive Countries & Points</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Mapbox GL JS -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
@@ -57,7 +57,7 @@
       margin: 0;
       font-size: 14px;
     }
-    /* Search container style */
+    /* Search container style with slight transparency and blur */
     #search-container {
       position: absolute;
       top: 20px;
@@ -130,9 +130,30 @@
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
-    // Replace with your Mapbox access token if needed.
-    mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
+    // Throttle function: ensures function is called at most once every "limit" ms.
+    function throttle(func, limit) {
+      let lastFunc;
+      let lastRan;
+      return function() {
+        const context = this;
+        const args = arguments;
+        if (!lastRan) {
+          func.apply(context, args);
+          lastRan = Date.now();
+        } else {
+          clearTimeout(lastFunc);
+          lastFunc = setTimeout(function() {
+            if ((Date.now() - lastRan) >= limit) {
+              func.apply(context, args);
+              lastRan = Date.now();
+            }
+          }, limit - (Date.now() - lastRan));
+        }
+      }
+    }
     
+    // Use your original Mapbox style and access token.
+    mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/sicko5/cm6k1juil010301qm2krq7o84',
@@ -143,10 +164,10 @@
     const mapMarkers = [];
     const cityMarkers = [];
     let lockedCity = null;
-    // Instead of a boolean flag for all countries, store the iso code of the clicked country (if any)
-    let lockedCountry = null;
+    // Flag to disable country hover effect once a country is clicked.
+    let countryLocked = false;
     
-    // Function to update the side popup (for marker info)
+    // Function to update the side popup with marker data.
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
@@ -163,7 +184,7 @@
       }
     }
     
-    // Update marker visibility based on zoom level.
+    // Update marker visibility based on current zoom.
     function updateMarkerVisibility() {
       const zoom = map.getZoom();
       mapMarkers.forEach(marker => {
@@ -174,7 +195,7 @@
       });
     }
     
-    // Load markers from CSV using PapaParse.
+    // Load CSV markers via PapaParse.
     Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv", {
       download: true,
       header: true,
@@ -196,12 +217,13 @@
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             cityMarkers.push(marker);
           }
-          // Hover popup behavior for markers.
+    
+          // Hover popup behavior.
           let isOverMarker = false;
           let isOverPopup = false;
           el.addEventListener("mouseenter", () => {
-            // Reset any country lock when interacting with markers.
-            lockedCountry = null;
+            // Reset country lock when interacting with markers.
+            countryLocked = false;
             isOverMarker = true;
             popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
             popup.once("open", () => {
@@ -223,11 +245,10 @@
               }
             }, 0);
           });
-          // On marker click: stop propagation so country clicks aren’t triggered.
+          // On marker click: prevent propagation so country click isn't triggered, zoom in (zoom 14) and update side popup.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
-            // Reset any country lock when a marker is clicked.
-            lockedCountry = null;
+            countryLocked = false;
             if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
               map.flyTo({
                 center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
@@ -246,7 +267,7 @@
               updateSidePopup(markerData);
             }
           });
-          // Set zoom filtering data.
+          // Set zoom filtering: non-city markers default to min zoom 12.
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             el.dataset.zoomMin = markerData.zoomMin || 0;
           } else {
@@ -303,14 +324,16 @@
     });
     
     /* Add interactive country boundaries using fill layers.
-       When a country is clicked, only that country’s hover effect is disabled until the pointer leaves it.
+       The hover effect is enabled when zoom is at or below 5,
+       and disabled if a country has been clicked (via countryLocked flag).
+       Additionally, the mousemove event is throttled for better performance.
     */
     map.on("load", function() {
       map.addSource("country-boundaries", {
         type: "vector",
         url: "mapbox://mapbox.country-boundaries-v1"
       });
-      // Fill layer for country areas (invisible but interactive)
+      // Fill layer for country areas (invisible but interactive).
       map.addLayer({
         id: "country-fills",
         type: "fill",
@@ -334,7 +357,7 @@
         },
         filter: ["==", "iso_3166_1", ""]
       });
-      // Line layer for natural borders.
+      // Line layer for natural country borders.
       map.addLayer({
         id: "country-borders",
         type: "line",
@@ -346,29 +369,15 @@
           "line-width": 1
         }
       });
-      // Mousemove listener to update highlight unless pointer is in the locked country.
-      map.on("mousemove", function(e) {
-        // If zoomed in above 6, disable hover effect.
-        if (map.getZoom() > 6) {
+      
+      // Throttle the mousemove event to improve performance.
+      map.on("mousemove", throttle(function(e) {
+        // Disable hover effect if zoom is above 5 or a country is locked.
+        if (map.getZoom() > 5 || countryLocked) {
           map.getCanvas().style.cursor = "";
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
           return;
         }
-        // If a country is locked, check if the pointer is still inside it.
-        if (lockedCountry) {
-          const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
-          let stillInLocked = features.some(f => f.properties.iso_3166_1 === lockedCountry);
-          if (stillInLocked) {
-            // Do nothing—hover effect remains off for the locked country.
-            map.getCanvas().style.cursor = "default";
-            map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
-            return;
-          } else {
-            // Pointer left the locked country; unlock it.
-            lockedCountry = null;
-          }
-        }
-        // Normal hover behavior:
         const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
         if (features.length > 0) {
           const feature = features[0];
@@ -378,27 +387,25 @@
           map.getCanvas().style.cursor = "";
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
         }
-      });
-      // On click within a country fill, zoom to its bounds and lock that country.
+      }, 50));
+      
+      // On click within a country, zoom to its bounds and lock the hover effect.
       map.on("click", "country-fills", function(e) {
         if (e.features.length > 0) {
           const feature = e.features[0];
           const bbox = turf.bbox(feature);
           map.fitBounds(bbox, { padding: 20 });
-          // Lock only the clicked country by storing its iso code.
-          lockedCountry = feature.properties.iso_3166_1;
-          // Clear the hover highlight for that country.
+          countryLocked = true;
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
         }
       });
-      // When clicking on empty space, unlock any locked country.
-      map.on("click", function(e) {
-        const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
-        if (features.length === 0) {
-          lockedCountry = null;
-        }
-      });
+    });
+    
+    // Reset countryLocked when clicking on a marker.
+    map.on("click", function(e) {
+      countryLocked = false;
     });
   </script>
 </body>
 </html>
+
