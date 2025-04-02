@@ -57,14 +57,14 @@
       margin: 0;
       font-size: 14px;
     }
-    /* Search container style with slight transparency and blur */
+    /* Search container style with transparency and blur */
     #search-container {
       position: absolute;
       top: 20px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 10;
-      background: rgba(255, 255, 255, 0.85);
+      background: rgba(255,255,255,0.85);
       backdrop-filter: blur(4px);
       padding: 10px 15px;
       border-radius: 8px;
@@ -130,8 +130,10 @@
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
-    // Use your original Mapbox style and access token.
+    // Replace with your own Mapbox access token if necessary.
     mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
+    
+    // Initialize the map with your original style.
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/sicko5/cm6k1juil010301qm2krq7o84',
@@ -160,7 +162,7 @@
       }
     }
     
-    // Update marker visibility based on current zoom level.
+    // Update marker visibility based on zoom level.
     function updateMarkerVisibility() {
       const zoom = map.getZoom();
       mapMarkers.forEach(marker => {
@@ -171,7 +173,7 @@
       });
     }
     
-    // Load markers from CSV via PapaParse.
+    // Load markers from CSV using PapaParse.
     Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv", {
       download: true,
       header: true,
@@ -180,46 +182,19 @@
           if (!markerData.lat || !markerData.lng) return;
           const el = document.createElement("div");
           el.className = "marker";
-    
           const popupContent = `
             ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
             ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:#fff; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ""}
           `;
           const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false })
             .setHTML(popupContent);
-    
           const marker = new mapboxgl.Marker(el)
             .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
             .addTo(map);
-    
           marker.markerData = markerData;
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             cityMarkers.push(marker);
           }
-    
-          // Ensure marker click events do not propagate to country layers.
-          el.addEventListener("click", (e) => {
-            e.stopPropagation();
-            // Use a higher zoom (14) so it zooms in fully.
-            if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
-              map.flyTo({
-                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
-                zoom: 14,
-                speed: 0.8
-              });
-              lockedCity = markerData;
-              updateSidePopup(markerData);
-            } else {
-              map.flyTo({
-                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
-                zoom: 14,
-                speed: 0.8
-              });
-              lockedCity = null;
-              updateSidePopup(markerData);
-            }
-          });
-    
           // Hover popup behavior.
           let isOverMarker = false;
           let isOverPopup = false;
@@ -245,8 +220,28 @@
               }
             }, 0);
           });
-    
-          // Set zoom filtering data.
+          // On marker click: prevent propagation to country layer, zoom in (to zoom 14), and update the side popup.
+          el.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
+              map.flyTo({
+                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+                zoom: 14,
+                speed: 0.8
+              });
+              lockedCity = markerData;
+              updateSidePopup(markerData);
+            } else {
+              map.flyTo({
+                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+                zoom: 14,
+                speed: 0.8
+              });
+              lockedCity = null;
+              updateSidePopup(markerData);
+            }
+          });
+          // Set zoom filtering: non-city markers default to min zoom 12.
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             el.dataset.zoomMin = markerData.zoomMin || 0;
           } else {
@@ -254,7 +249,6 @@
           }
           el.dataset.zoomMax = markerData.zoomMax || 20;
           el.dataset.name = (markerData.name || "").toLowerCase();
-    
           mapMarkers.push(marker);
         });
         updateMarkerVisibility();
@@ -303,13 +297,13 @@
       }
     });
     
-    /* Add interactive country boundaries using fill layers so that clicking anywhere inside a country works */
+    /* Add interactive country boundaries using fill layers so that clicking anywhere inside a country works and hover effect applies */
     map.on("load", function() {
       map.addSource("country-boundaries", {
         type: "vector",
         url: "mapbox://mapbox.country-boundaries-v1"
       });
-      // Add a fill layer for country areas (invisible by default but interactive).
+      // Fill layer for country areas (invisible but interactive)
       map.addLayer({
         id: "country-fills",
         type: "fill",
@@ -321,7 +315,7 @@
           "fill-opacity": 0
         }
       });
-      // Add a fill layer for hover effect (slight color change).
+      // Fill layer for hover effect (shows slight fill color)
       map.addLayer({
         id: "country-fills-highlight",
         type: "fill",
@@ -333,7 +327,7 @@
         },
         filter: ["==", "iso_3166_1", ""]
       });
-      // Add a line layer for natural borders.
+      // Line layer for natural country borders.
       map.addLayer({
         id: "country-borders",
         type: "line",
@@ -345,23 +339,23 @@
           "line-width": 1
         }
       });
-      // Change cursor when hovering over country areas.
-      map.on("mouseenter", "country-fills", function(e) {
-        map.getCanvas().style.cursor = "pointer";
-        if (e.features.length > 0) {
-          var feature = e.features[0];
+      // Use a mousemove listener on the map to continuously update the country highlight.
+      map.on("mousemove", function(e) {
+        const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
+        if (features.length > 0) {
+          const feature = features[0];
+          map.getCanvas().style.cursor = "pointer";
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", feature.properties.iso_3166_1]);
+        } else {
+          map.getCanvas().style.cursor = "";
+          map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
         }
       });
-      map.on("mouseleave", "country-fills", function() {
-        map.getCanvas().style.cursor = "";
-        map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
-      });
-      // On click anywhere inside a country, zoom to its bounds.
+      // On click inside a country, zoom to its bounds.
       map.on("click", "country-fills", function(e) {
         if (e.features.length > 0) {
-          var feature = e.features[0];
-          var bbox = turf.bbox(feature);
+          const feature = e.features[0];
+          const bbox = turf.bbox(feature);
           map.fitBounds(bbox, { padding: 20 });
         }
       });
@@ -369,3 +363,4 @@
   </script>
 </body>
 </html>
+
