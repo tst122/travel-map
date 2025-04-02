@@ -57,7 +57,7 @@
       margin: 0;
       font-size: 14px;
     }
-    /* Search container style with transparency and blur */
+    /* Search container style with slight transparency and blur */
     #search-container {
       position: absolute;
       top: 20px;
@@ -130,10 +130,8 @@
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
-    // Replace with your own Mapbox access token if necessary.
+    // Use your original Mapbox style and access token.
     mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
-    
-    // Initialize the map with your original style.
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/sicko5/cm6k1juil010301qm2krq7o84',
@@ -145,7 +143,7 @@
     const cityMarkers = [];
     let lockedCity = null;
     
-    // Function to update the side popup using marker data.
+    // Function to update the side popup with marker data.
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
@@ -162,7 +160,7 @@
       }
     }
     
-    // Update marker visibility based on zoom level.
+    // Update marker visibility based on zoom.
     function updateMarkerVisibility() {
       const zoom = map.getZoom();
       mapMarkers.forEach(marker => {
@@ -220,7 +218,8 @@
               }
             }, 0);
           });
-          // On marker click: prevent propagation to country layer, zoom in (to zoom 14), and update the side popup.
+          // On marker click: stop propagation so country clicks aren't triggered,
+          // zoom in (to zoom 14) and update the side popup.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
@@ -297,13 +296,15 @@
       }
     });
     
-    /* Add interactive country boundaries using fill layers so that clicking anywhere inside a country works and hover effect applies */
+    /* Add interactive country boundaries using fill layers.
+       The hover effect is applied only when zoomed out (zoom <= 6).
+       When zoomed in above 6, the hover highlight is disabled. */
     map.on("load", function() {
       map.addSource("country-boundaries", {
         type: "vector",
         url: "mapbox://mapbox.country-boundaries-v1"
       });
-      // Fill layer for country areas (invisible but interactive)
+      // Add a fill layer for country areas (invisible but interactive).
       map.addLayer({
         id: "country-fills",
         type: "fill",
@@ -315,7 +316,7 @@
           "fill-opacity": 0
         }
       });
-      // Fill layer for hover effect (shows slight fill color)
+      // Add a fill layer for hover effect.
       map.addLayer({
         id: "country-fills-highlight",
         type: "fill",
@@ -327,7 +328,7 @@
         },
         filter: ["==", "iso_3166_1", ""]
       });
-      // Line layer for natural country borders.
+      // Add a line layer for natural country borders.
       map.addLayer({
         id: "country-borders",
         type: "line",
@@ -339,8 +340,14 @@
           "line-width": 1
         }
       });
-      // Use a mousemove listener on the map to continuously update the country highlight.
+      // Use a mousemove listener to update the highlight.
       map.on("mousemove", function(e) {
+        // Disable hover effect when zoomed in above 6.
+        if (map.getZoom() > 6) {
+          map.getCanvas().style.cursor = "";
+          map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
+          return;
+        }
         const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
         if (features.length > 0) {
           const feature = features[0];
