@@ -8,10 +8,19 @@
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <style>
-    body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+    }
     .marker {
-      background-color: #ff5a5f;
+      background-color: #5a6bff;
       width: 16px;
       height: 16px;
       border-radius: 50%;
@@ -47,7 +56,7 @@
       background: #fff;
       padding: 10px 15px;
       border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
     }
     #search-box {
       padding: 10px;
@@ -61,94 +70,210 @@
     #search-box:focus {
       outline: none;
       border-color: #0077ff;
-      box-shadow: 0 0 5px rgba(0, 119, 255, 0.4);
+      box-shadow: 0 0 5px rgba(0,119,255,0.4);
+    }
+    /* Sidebar (side popup) styling */
+    #side-popup {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 250px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      padding: 15px;
+      display: none;
+      z-index: 11;
+    }
+    #side-popup h3 {
+      margin-top: 0;
+      color: #0077ff;
+    }
+    #side-popup a {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 8px 14px;
+      background: #0077ff;
+      color: white;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
-<div id="search-container">
-  <input type="text" id="search-box" placeholder="🔍 Search locations...">
-</div>
-<div id="map"></div>
+  <div id="search-container">
+    <input type="text" id="search-box" placeholder="🔍 Search locations...">
+  </div>
+  <!-- Sidebar (side popup) -->
+  <div id="side-popup"></div>
+  <div id="map"></div>
 
-<script>
-  mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
+  <script>
+    mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
 
-  const map = new mapboxgl.Map({
-    container: 'map',
-    style: 'mapbox://styles/sicko5/cm6k1juil010301qm2krq7o84',
-    center: [-0.1276, 51.5072],
-    zoom: 2
-  });
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/sicko5/cm6k1juil010301qm2krq7o84',
+      center: [-0.1276, 51.5072],
+      zoom: 2
+    });
 
-  const mapMarkers = [];
+    const mapMarkers = [];
+    const cityMarkers = [];  // Only markers flagged as cities.
+    let lockedCity = null;   // Holds city data when a city marker is clicked.
 
-  Papa.parse('https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv', {
-    download: true,
-    header: true,
-    complete: function(results) {
-      results.data.forEach((markerData) => {
-        if (!markerData.lat || !markerData.lng) return;
+    // Updated function: if a "popup" field exists, use it without duplicating the city name.
+    function updateSidePopup(data) {
+      const sidePopup = document.getElementById('side-popup');
+      if (data) {
+        let content = "";
+        if (!data.popup) {
+          content += `<h3>${data.name}</h3>`;
+        }
+        content += data.popup ? `<div>${data.popup}</div>` : '';
+        content += data.link ? `<a href="${data.link}" target="_blank">Explore →</a>` : '';
+        sidePopup.innerHTML = content;
+        sidePopup.style.display = 'block';
+      } else {
+        sidePopup.style.display = 'none';
+      }
+    }
 
-        const el = document.createElement('div');
-        el.className = 'marker';
+    Papa.parse('https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv', {
+      download: true,
+      header: true,
+      complete: function(results) {
+        results.data.forEach((markerData) => {
+          if (!markerData.lat || !markerData.lng) return;
 
-        const popupContent = `
-          ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
-          ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:white; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ''}
-        `;
+          const el = document.createElement('div');
+          el.className = 'marker';
 
-        const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(popupContent);
-        const hoverPopup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false }).setText(markerData.name);
+          const popupContent = `
+            ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
+            ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:white; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ''}
+          `;
+          // Create a hover popup.
+          const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false })
+                        .setHTML(popupContent);
 
-        const marker = new mapboxgl.Marker(el)
-          .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
-          .setPopup(popup)
-          .addTo(map);
+          const marker = new mapboxgl.Marker(el)
+            .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
+            .addTo(map);
 
-        el.addEventListener('click', () => {
-          map.flyTo({ center: [parseFloat(markerData.lng), parseFloat(markerData.lat)], zoom: 12, speed: 0.8 });
-        });
+          // Save marker data.
+          marker.markerData = markerData;
+          // If this marker is a city, push it into the cityMarkers array.
+          if (markerData.isCity && markerData.isCity.toLowerCase() === 'true') {
+            cityMarkers.push(marker);
+          }
 
-        el.addEventListener('mouseenter', () => {
-          hoverPopup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
-        });
+          let hideTimeout;
+          function attachPopupEvents() {
+            const popupEl = popup.getElement();
+            if (popupEl) {
+              popupEl.addEventListener('mouseenter', () => { clearTimeout(hideTimeout); });
+              popupEl.addEventListener('mouseleave', () => {
+                hideTimeout = setTimeout(() => { popup.remove(); }, 300);
+              });
+            }
+          }
 
-        el.addEventListener('mouseleave', () => {
-          hoverPopup.remove();
-        });
+          el.addEventListener('mouseenter', () => {
+            clearTimeout(hideTimeout);
+            popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
+            // Attach popup events as soon as the popup opens.
+            popup.once('open', attachPopupEvents);
+          });
 
-        marker.getElement().dataset.zoomMin = markerData.zoomMin || 0;
-        marker.getElement().dataset.zoomMax = markerData.zoomMax || 20;
-        marker.getElement().dataset.name = (markerData.name || '').toLowerCase();
+          el.addEventListener('mouseleave', () => {
+            hideTimeout = setTimeout(() => { popup.remove(); }, 300);
+          });
 
-        mapMarkers.push(marker);
-      });
+          // On marker click: fly to location and lock side popup if it's a city.
+          el.addEventListener('click', () => {
+            map.flyTo({ center: [parseFloat(markerData.lng), parseFloat(markerData.lat)], zoom: 12, speed: 0.8 });
+            if (markerData.isCity && markerData.isCity.toLowerCase() === 'true') {
+              lockedCity = markerData;
+              updateSidePopup(markerData);
+            } else {
+              lockedCity = null;
+              updateSidePopup(null);
+            }
+          });
 
-      map.on('zoom', () => {
-        const zoom = map.getZoom();
-        mapMarkers.forEach((marker) => {
-          const el = marker.getElement();
-          const min = parseFloat(el.dataset.zoomMin);
-          const max = parseFloat(el.dataset.zoomMax);
-          el.style.display = (zoom >= min && zoom <= max) ? 'block' : 'none';
-        });
-      });
-
-      document.getElementById('search-box').addEventListener('input', function(e) {
-        const searchTerm = e.target.value.toLowerCase();
-        mapMarkers.forEach((marker) => {
-          const name = marker.getElement().dataset.name;
-          if (!searchTerm || (name && name.includes(searchTerm))) {
-            marker.getElement().style.display = 'block';
+          // Set zoom filtering data.
+          if (markerData.isCity && markerData.isCity.toLowerCase() === 'true') {
+            // For city markers, use provided zoomMin or default to 0.
+            marker.getElement().dataset.zoomMin = markerData.zoomMin || 0;
           } else {
-            marker.getElement().style.display = 'none';
+            // For non-city markers, default to a higher zoom (e.g. 12) so they don't show at low zoom.
+            marker.getElement().dataset.zoomMin = markerData.zoomMin || 12;
+          }
+          marker.getElement().dataset.zoomMax = markerData.zoomMax || 20;
+          marker.getElement().dataset.name = (markerData.name || '').toLowerCase();
+
+          mapMarkers.push(marker);
+        });
+
+        // Zoom filtering for markers.
+        map.on('zoom', () => {
+          const zoom = map.getZoom();
+          mapMarkers.forEach((marker) => {
+            const el = marker.getElement();
+            const min = parseFloat(el.dataset.zoomMin);
+            const max = parseFloat(el.dataset.zoomMax);
+            el.style.display = (zoom >= min && zoom <= max) ? 'block' : 'none';
+          });
+        });
+
+        // Search filtering.
+        document.getElementById('search-box').addEventListener('input', function(e) {
+          const searchTerm = e.target.value.toLowerCase();
+          mapMarkers.forEach((marker) => {
+            const name = marker.getElement().dataset.name;
+            marker.getElement().style.display = (!searchTerm || (name && name.includes(searchTerm))) ? 'block' : 'none';
+          });
+        });
+
+        // On map moveend, update the side popup for cities.
+        map.on('moveend', () => {
+          const zoom = map.getZoom();
+          if (zoom < 12) {
+            updateSidePopup(null);
+            lockedCity = null;
+            return;
+          }
+          // If a city is locked (clicked), keep showing its info.
+          if (lockedCity) {
+            updateSidePopup(lockedCity);
+            return;
+          }
+          // Compute the canvas center.
+          const canvasCenter = { x: map.getCanvas().width / 2, y: map.getCanvas().height / 2 };
+          let closestCity = null;
+          let minDist = Infinity;
+          for (let i = 0; i < cityMarkers.length; i++) {
+            const marker = cityMarkers[i];
+            const screenPos = map.project(marker.getLngLat());
+            const dx = screenPos.x - canvasCenter.x;
+            const dy = screenPos.y - canvasCenter.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < minDist) {
+              minDist = dist;
+              closestCity = marker;
+            }
+          }
+          if (closestCity && minDist < 100) {
+            updateSidePopup(closestCity.markerData);
+          } else {
+            updateSidePopup(null);
           }
         });
-      });
-    }
-  });
-</script>
+      }
+    });
+  </script>
 </body>
 </html>
 
