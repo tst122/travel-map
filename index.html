@@ -140,7 +140,7 @@
     // Update side popup for country hover.
     function updateCountrySidePopup(feature) {
       const countryName = feature.properties.ADMIN || feature.properties.NAME || feature.properties.name_en || "Unknown";
-      const iso = (feature.properties.iso_3166_1 || "").toLowerCase();
+      const iso = (feature.properties.iso_3166_1 || "").toUpperCase();
       const emojiFlag = iso ? isoToEmoji(iso) : "";
       const content = `<div style="display:flex; align-items:center;">
                          <span style="font-size:32px; margin-right:10px;">${emojiFlag}</span>
@@ -483,9 +483,12 @@
       map.on("click", "country-fills", function(e) {
         if (e.features.length > 0) {
           const feature = e.features[0];
-          let targetFeature = feature;
-          if (feature.geometry.type === "MultiPolygon") {
-            let maxArea = 0;
+          let bbox;
+          // Special handling for Canada: focus only on provinces (exclude territories)
+          if (feature.properties.iso_3166_1 === "CAN") {
+            let combinedBbox;
+            let found = false;
+            // Loop over each polygon in the MultiPolygon.
             feature.geometry.coordinates.forEach(polygon => {
               const polyFeature = {
                 type: "Feature",
@@ -494,14 +497,70 @@
                   coordinates: polygon
                 }
               };
-              const area = turf.area(polyFeature);
-              if (area > maxArea) {
-                maxArea = area;
-                targetFeature = polyFeature;
+              // Use Turf to calculate the centroid.
+              const centroid = turf.centroid(polyFeature);
+              // Only include polygons with a centroid latitude less than 60° (provinces).
+              if (centroid.geometry.coordinates[1] < 60) {
+                found = true;
+                const polyBbox = turf.bbox(polyFeature);
+                if (!combinedBbox) {
+                  combinedBbox = polyBbox;
+                } else {
+                  combinedBbox = [
+                    Math.min(combinedBbox[0], polyBbox[0]),
+                    Math.min(combinedBbox[1], polyBbox[1]),
+                    Math.max(combinedBbox[2], polyBbox[2]),
+                    Math.max(combinedBbox[3], polyBbox[3])
+                  ];
+                }
               }
             });
+            if (found) {
+              bbox = combinedBbox;
+            } else {
+              // Fallback: use largest polygon.
+              let maxArea = 0;
+              let targetFeature = feature;
+              if (feature.geometry.type === "MultiPolygon") {
+                feature.geometry.coordinates.forEach(polygon => {
+                  const polyFeature = {
+                    type: "Feature",
+                    geometry: {
+                      type: "Polygon",
+                      coordinates: polygon
+                    }
+                  };
+                  const area = turf.area(polyFeature);
+                  if (area > maxArea) {
+                    maxArea = area;
+                    targetFeature = polyFeature;
+                  }
+                });
+              }
+              bbox = turf.bbox(targetFeature);
+            }
+          } else {
+            // Default behavior for other countries.
+            let targetFeature = feature;
+            if (feature.geometry.type === "MultiPolygon") {
+              let maxArea = 0;
+              feature.geometry.coordinates.forEach(polygon => {
+                const polyFeature = {
+                  type: "Feature",
+                  geometry: {
+                    type: "Polygon",
+                    coordinates: polygon
+                  }
+                };
+                const area = turf.area(polyFeature);
+                if (area > maxArea) {
+                  maxArea = area;
+                  targetFeature = polyFeature;
+                }
+              });
+            }
+            bbox = turf.bbox(targetFeature);
           }
-          const bbox = turf.bbox(targetFeature);
           map.fitBounds(bbox, { padding: 20, duration: 500 });
           countryLocked = true;
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
@@ -530,4 +589,5 @@
   </script>
 </body>
 </html>
+
 
