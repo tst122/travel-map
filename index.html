@@ -128,7 +128,7 @@
   <div id="search-container">
     <input type="text" id="search-box" placeholder="🔍 Search locations...">
   </div>
-  <!-- Side popup (for displaying info after click or zoom) -->
+  <!-- Side popup (for displaying city info after click or zoom) -->
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
@@ -137,7 +137,7 @@
       return isoCode.toUpperCase().split('').map(char => String.fromCodePoint(127397 + char.charCodeAt())).join('');
     }
     
-    // Update side popup with country info.
+    // Update side popup for country hover.
     function updateCountrySidePopup(feature) {
       const countryName = feature.properties.ADMIN || feature.properties.NAME || feature.properties.name_en || "Unknown";
       const iso = (feature.properties.iso_3166_1 || "").toLowerCase();
@@ -182,8 +182,7 @@
     
     const mapMarkers = [];
     const cityMarkers = [];
-    let lockedCity = null;   // Holds city marker data if clicked.
-    let lockedCountry = null; // Holds country feature if clicked.
+    let lockedCity = null; // Holds city marker data if clicked.
     let countryLocked = false; // For country hover.
     
     // Update side popup with marker data.
@@ -274,14 +273,13 @@
             }, 100);
           });
   
-          // On click for marker: clear hover effects, fly to marker, and update side popup.
+          // On click: clear hover effects, fly to marker, and update the side popup.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             // Clear country hover effects.
             map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
             map.getCanvas().style.cursor = "";
             countryLocked = false;
-            lockedCountry = null; // Clear any locked country.
             updateSidePopup(null);
             popup.remove();
             if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
@@ -350,10 +348,9 @@
             speed: 1.5
           });
           lockedCity = (markerData.isCity && markerData.isCity.toLowerCase() === "true") ? markerData : null;
-          lockedCountry = null;
           updateSidePopup(markerData);
         } else {
-          // If no marker match, try to find a matching country.
+          // If no marker, try to find a matching country.
           const countryFeatures = map.querySourceFeatures('country-boundaries', { sourceLayer: 'country_boundaries' });
           let foundCountry = null;
           for (const feature of countryFeatures) {
@@ -367,29 +364,22 @@
             const bbox = turf.bbox(foundCountry);
             map.fitBounds(bbox, { padding: 20, duration: 500 });
             countryLocked = true;
-            lockedCountry = foundCountry;
-            lockedCity = null;
-            updateCountrySidePopup(foundCountry);
+            updateSidePopup(null);
           }
         }
       }
     });
     
-    // On moveend, if no marker or country is locked, update the side popup with the nearest visible city marker.
+    // On moveend, if no city is locked and zoom is high, update the side popup with the nearest visible city marker.
     map.on("moveend", () => {
       const zoom = map.getZoom();
       if (zoom < 12) {
         updateSidePopup(null);
         lockedCity = null;
-        lockedCountry = null;
         return;
       }
       if (lockedCity) {
         updateSidePopup(lockedCity);
-        return;
-      }
-      if (lockedCountry) {
-        updateCountrySidePopup(lockedCountry);
         return;
       }
       const bounds = map.getBounds();
@@ -463,9 +453,8 @@
       
       // Throttled mousemove for country hover.
       map.on("mousemove", throttle(function(e) {
-        // Disable country hover if zoomed in or if a country is locked.
+        // Disable country hover if zoomed in (>=12).
         if (map.getZoom() >= 12) return;
-        if (lockedCountry) return;
         if (lockedCity) return;
         let threshold = 4;
         const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
@@ -490,7 +479,7 @@
         }
       }, 20));
       
-      // On click for country fills: lock the country and update the side popup.
+      // Click on country fills.
       map.on("click", "country-fills", function(e) {
         if (e.features.length > 0) {
           const feature = e.features[0];
@@ -515,18 +504,15 @@
           const bbox = turf.bbox(targetFeature);
           map.fitBounds(bbox, { padding: 20, duration: 500 });
           countryLocked = true;
-          lockedCountry = feature;
-          lockedCity = null;
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
-          updateCountrySidePopup(feature);
+          updateSidePopup(null);
         }
       });
     });
     
-    // Reset countryLocked and lockedCountry on a general map click.
+    // Reset countryLocked on click.
     map.on("click", function(e) {
       countryLocked = false;
-      lockedCountry = null;
     });
     
     // Move country hover layer above symbols.
