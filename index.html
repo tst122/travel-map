@@ -35,7 +35,7 @@
       box-shadow: 0 2px 5px rgba(0,0,0,0.3);
       transition: background-color 0.3s ease;
     }
-    /* Hover effect for all markers—override inline styles with !important */
+    /* Hover effect for all markers (overrides any custom color) */
     .marker:hover {
       background-color: #ff5722 !important;
     }
@@ -128,7 +128,7 @@
   <div id="search-container">
     <input type="text" id="search-box" placeholder="🔍 Search locations...">
   </div>
-  <!-- Side popup (for displaying city info after click) -->
+  <!-- Side popup (for displaying city info after click or zoom) -->
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
@@ -182,7 +182,7 @@
     
     const mapMarkers = [];
     const cityMarkers = [];
-    let lockedCity = null; // Holds city marker data on click.
+    let lockedCity = null; // Holds city marker data if clicked.
     let countryLocked = false; // For country hover.
     
     // Update side popup with marker data.
@@ -227,7 +227,6 @@
           // If the CSV has a "color" field, use it.
           if (markerData.color) {
             el.style.backgroundColor = markerData.color;
-            el.classList.add("custom");
           }
   
           const popupContent = `
@@ -274,7 +273,7 @@
             }, 100);
           });
   
-          // On click: clear any hover effects, fly to marker, and update the side popup.
+          // On click: clear hover effects, fly to marker, and update the side popup.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             // Clear country hover effects.
@@ -371,6 +370,8 @@
       }
     });
     
+    // On moveend, if not locked and zoomed in, update the side popup using the city marker 
+    // that is closest to the center if it is visible within the current map bounds.
     map.on("moveend", () => {
       const zoom = map.getZoom();
       if (zoom < 12) {
@@ -382,11 +383,14 @@
         updateSidePopup(lockedCity);
         return;
       }
-      const canvasCenter = { x: map.getCanvas().width / 2, y: map.getCanvas().height / 2 };
+      const bounds = map.getBounds();
       let closestCity = null;
       let minDist = Infinity;
+      const canvasCenter = { x: map.getCanvas().width / 2, y: map.getCanvas().height / 2 };
       for (let i = 0; i < cityMarkers.length; i++) {
         const marker = cityMarkers[i];
+        // Only consider markers that are within the current bounds.
+        if (!bounds.contains(marker.getLngLat())) continue;
         const screenPos = map.project(marker.getLngLat());
         const dx = screenPos.x - canvasCenter.x;
         const dy = screenPos.y - canvasCenter.y;
@@ -396,7 +400,7 @@
           closestCity = marker;
         }
       }
-      if (closestCity && minDist < 100) {
+      if (closestCity) {
         updateSidePopup(closestCity.markerData);
       } else {
         updateSidePopup(null);
