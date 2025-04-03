@@ -427,6 +427,8 @@
       
       // Throttled mousemove to update country hover highlight and side popup.
       map.on("mousemove", throttle(function(e) {
+        // If a city marker is locked, disable country hover updates.
+        if (lockedCity) return;
         // Determine threshold: for NA, disable hover if zoom > 3; for others, if zoom > 4.
         let threshold = 4; // default for non-NA.
         const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
