@@ -230,12 +230,16 @@
           if (!markerData.lat || !markerData.lng) return;
           const el = document.createElement("div");
           el.className = "marker";
+          // Initialize lock flag (when "true" the popup will not be auto-removed on hover-out)
+          el.dataset.locked = "false";
+
           const popupContent = `
             ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
             ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:#fff; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ""}
           `;
           const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false })
             .setHTML(popupContent);
+
           const marker = new mapboxgl.Marker(el)
             .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
             .addTo(map);
@@ -243,10 +247,13 @@
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             cityMarkers.push(marker);
           }
+
           // Marker hover popup behavior.
           let isOverMarker = false;
           let isOverPopup = false;
           el.addEventListener("mouseenter", () => {
+            // If this marker is locked, do nothing on hover.
+            if (el.dataset.locked === "true") return;
             countryLocked = false;
             isOverMarker = true;
             popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
@@ -256,24 +263,28 @@
                 popupEl.addEventListener("mouseenter", () => { isOverPopup = true; });
                 popupEl.addEventListener("mouseleave", () => {
                   isOverPopup = false;
-                  if (!isOverMarker) popup.remove();
+                  if (!isOverMarker && el.dataset.locked !== "true") popup.remove();
                 });
               }
             });
           });
           el.addEventListener("mouseleave", () => {
+            // Do not remove the popup if locked.
+            if (el.dataset.locked === "true") return;
             isOverMarker = false;
             setTimeout(() => {
-              if (!isOverMarker && !isOverPopup) {
+              if (!isOverMarker && !isOverPopup && el.dataset.locked !== "true") {
                 popup.remove();
               }
             }, 100);
           });
-          // On marker click: stop propagation, zoom in (to zoom 14, speed 1.5) and update side popup.
+          // On marker click: lock the popup and zoom in.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             countryLocked = false;
             updateSidePopup(null);
+            // Lock this marker’s popup by setting its flag
+            el.dataset.locked = "true";
             if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
               map.flyTo({
                 center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
@@ -282,6 +293,9 @@
               });
               lockedCity = markerData;
               updateSidePopup(markerData);
+              // Force the popup to appear (or remain) and store it so we can remove it later.
+              popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
+              marker.popup = popup;
             } else {
               map.flyTo({
                 center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
@@ -321,6 +335,16 @@
       if (zoom < 12) {
         updateSidePopup(null);
         lockedCity = null;
+        // Remove persistent popups for locked city markers.
+        cityMarkers.forEach(marker => {
+          if (marker.getElement().dataset.locked === "true") {
+            if (marker.popup) {
+              marker.popup.remove();
+              marker.popup = null;
+            }
+            marker.getElement().dataset.locked = "false";
+          }
+        });
         return;
       }
       if (lockedCity) {
