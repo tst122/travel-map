@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Custom Map with Interactive Countries & Points</title>
+  <title>Interactive Map with Country Hover Popups</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Mapbox GL JS -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
@@ -38,7 +38,7 @@
     .marker:hover {
       background-color: #ff5722;
     }
-    /* Popup content style */
+    /* Popup content style for marker popups */
     .mapboxgl-popup-content {
       padding: 15px;
       border-radius: 8px;
@@ -86,7 +86,7 @@
     #search-box:focus {
       box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
     }
-    /* Side popup style */
+    /* Side popup style (used for both markers and country hover) */
     #side-popup {
       position: absolute;
       top: 20px;
@@ -126,11 +126,11 @@
   <div id="search-container">
     <input type="text" id="search-box" placeholder="🔍 Search locations...">
   </div>
-  <!-- Side popup -->
+  <!-- Side popup (used for both markers and country hover) -->
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
-    // Throttle function to limit the frequency of execution (used for country hover updates).
+    // Throttle function to limit execution frequency (used for country hover updates).
     function throttle(func, limit) {
       let lastFunc;
       let lastRan;
@@ -152,12 +152,27 @@
       }
     }
     
-    // Set initial zoom to 2.
+    // Function to update the country side popup with country name and flag.
+    function updateCountrySidePopup(feature) {
+      const countryName = feature.properties.ADMIN;
+      const iso = feature.properties.iso_3166_1.toLowerCase();
+      // Using Flagpedia CDN (adjust size as needed).
+      const flagUrl = "https://flagcdn.com/w40/" + iso + ".png";
+      const content = `<div style="display:flex; align-items:center;">
+                         <img src="${flagUrl}" alt="${countryName} flag" style="width:30px; margin-right:10px; border:1px solid #ccc; border-radius:3px;">
+                         <span style="font-size:18px; color:#0077ff;">${countryName}</span>
+                       </div>`;
+      const sidePopup = document.getElementById('side-popup');
+      sidePopup.innerHTML = content;
+      sidePopup.style.display = "block";
+    }
+    
+    // Use your original Mapbox style and access token.
     mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/sicko5/cm6k1juil010301qm2krq7o84',
-      center: [-30, 40], // Example center between Europe and North America
+      center: [-30, 40], // roughly in the middle of the Atlantic
       zoom: 2
     });
     
@@ -167,7 +182,7 @@
     // Flag to disable country hover effect when a country is clicked.
     let countryLocked = false;
     
-    // Function to update the side popup using marker data.
+    // Function to update the marker/point side popup.
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
@@ -195,7 +210,7 @@
       });
     }
     
-    // Load CSV markers via PapaParse.
+    // Load markers from CSV using PapaParse.
     Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv", {
       download: true,
       header: true,
@@ -217,7 +232,7 @@
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             cityMarkers.push(marker);
           }
-          // Hover popup behavior.
+          // Hover popup behavior for markers.
           let isOverMarker = false;
           let isOverPopup = false;
           el.addEventListener("mouseenter", () => {
@@ -242,12 +257,14 @@
               if (!isOverMarker && !isOverPopup) {
                 popup.remove();
               }
-            }, 100); // 100 ms delay for responsiveness.
+            }, 100);
           });
-          // On marker click: stop propagation so country clicks aren't triggered, zoom in (to zoom 14, speed 1.5) and update side popup.
+          // On marker click: prevent propagation, zoom in (to zoom 14, speed 1.5) and update side popup.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             countryLocked = false;
+            // When a marker is clicked, hide any country side popup.
+            updateSidePopup(null);
             if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
               map.flyTo({
                 center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
@@ -328,6 +345,7 @@
          • For other regions, hover is enabled when zoom is ≤ 4.
        - Once a country is clicked, the hover effect is disabled via the countryLocked flag.
        - The mousemove event is throttled (20 ms) for performance.
+       - Additionally, on hover, the side popup displays the country name and flag.
     */
     map.on("load", function() {
       map.addSource("country-boundaries", {
@@ -374,7 +392,7 @@
       // List of North American country ISO codes.
       const naCountries = ["USA", "CAN", "MEX"];
       
-      // Throttled mousemove to update country hover highlight.
+      // Throttled mousemove to update country hover highlight and side popup.
       map.on("mousemove", throttle(function(e) {
         // Determine threshold: for NA, disable hover if zoom > 3; for others, if zoom > 4.
         let threshold = 4; // default for non-NA.
@@ -387,13 +405,18 @@
           if (map.getZoom() > threshold || countryLocked) {
             map.getCanvas().style.cursor = "";
             map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
+            // Hide country side popup if one is showing.
+            if (!lockedCity) updateSidePopup(null);
             return;
           }
           map.getCanvas().style.cursor = "pointer";
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", feature.properties.iso_3166_1]);
+          // Update the side popup with country info.
+          updateCountrySidePopup(feature);
         } else {
           map.getCanvas().style.cursor = "";
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
+          if (!lockedCity) updateSidePopup(null);
         }
       }, 20));
       
@@ -424,6 +447,8 @@
           map.fitBounds(bbox, { padding: 20, duration: 500 });
           countryLocked = true;
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
+          // Clear the side popup (so marker popup can later override).
+          updateSidePopup(null);
         }
       });
     });
