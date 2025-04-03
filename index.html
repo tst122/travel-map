@@ -86,7 +86,7 @@
     #search-box:focus {
       box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
     }
-    /* Side popup style (used for marker and country hover popups) */
+    /* Side popup style (used for both marker and country hover popups) */
     #side-popup {
       position: absolute;
       top: 20px;
@@ -140,7 +140,8 @@
     }
     
     // Function to update the side popup for country hover.
-    // This version forces the use of the ADMIN property (English name) only.
+    // This version uses only the ADMIN property (the official English country name)
+    // and falls back to "Unknown" if not available.
     function updateCountrySidePopup(feature) {
       const countryName = feature.properties.ADMIN || "Unknown";
       const iso = (feature.properties.iso_3166_1 || "").toLowerCase();
