@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Interactive Map with Country Hover Popups</title>
+  <title>Custom Map with Country & Marker Popups</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Mapbox GL JS -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
@@ -86,7 +86,7 @@
     #search-box:focus {
       box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
     }
-    /* Side popup style (used for both markers and country hover) */
+    /* Side popup style (used for marker popups and country hover popups) */
     #side-popup {
       position: absolute;
       top: 20px;
@@ -126,10 +126,33 @@
   <div id="search-container">
     <input type="text" id="search-box" placeholder="🔍 Search locations...">
   </div>
-  <!-- Side popup (used for both markers and country hover) -->
+  <!-- Side popup (used for marker or country hover popups) -->
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
+    // Helper function: Convert ISO country code to emoji flag.
+    function isoToEmoji(isoCode) {
+      return isoCode
+        .toUpperCase()
+        .split('')
+        .map(char => String.fromCodePoint(127397 + char.charCodeAt()))
+        .join('');
+    }
+    
+    // Function to update the side popup for country hover.
+    function updateCountrySidePopup(feature) {
+      const countryName = feature.properties.ADMIN || "Unknown";
+      const iso = feature.properties.iso_3166_1 || "";
+      const emojiFlag = iso ? isoToEmoji(iso) : "";
+      const content = `<div style="display:flex; align-items:center;">
+                          <span style="font-size:32px; margin-right:10px;">${emojiFlag}</span>
+                          <span style="font-size:20px; color:#0077ff;">${countryName}</span>
+                       </div>`;
+      const sidePopup = document.getElementById('side-popup');
+      sidePopup.innerHTML = content;
+      sidePopup.style.display = "block";
+    }
+    
     // Throttle function to limit execution frequency (used for country hover updates).
     function throttle(func, limit) {
       let lastFunc;
@@ -152,21 +175,6 @@
       }
     }
     
-    // Function to update the country side popup with country name and flag.
-    function updateCountrySidePopup(feature) {
-      const countryName = feature.properties.ADMIN;
-      const iso = feature.properties.iso_3166_1.toLowerCase();
-      // Using Flagpedia CDN (adjust size as needed).
-      const flagUrl = "https://flagcdn.com/w40/" + iso + ".png";
-      const content = `<div style="display:flex; align-items:center;">
-                         <img src="${flagUrl}" alt="${countryName} flag" style="width:30px; margin-right:10px; border:1px solid #ccc; border-radius:3px;">
-                         <span style="font-size:18px; color:#0077ff;">${countryName}</span>
-                       </div>`;
-      const sidePopup = document.getElementById('side-popup');
-      sidePopup.innerHTML = content;
-      sidePopup.style.display = "block";
-    }
-    
     // Use your original Mapbox style and access token.
     mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
     const map = new mapboxgl.Map({
@@ -182,7 +190,7 @@
     // Flag to disable country hover effect when a country is clicked.
     let countryLocked = false;
     
-    // Function to update the marker/point side popup.
+    // Function to update the marker side popup.
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
@@ -232,11 +240,10 @@
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             cityMarkers.push(marker);
           }
-          // Hover popup behavior for markers.
+          // Marker hover popup behavior.
           let isOverMarker = false;
           let isOverPopup = false;
           el.addEventListener("mouseenter", () => {
-            // Reset country lock when interacting with markers.
             countryLocked = false;
             isOverMarker = true;
             popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
@@ -259,7 +266,7 @@
               }
             }, 100);
           });
-          // On marker click: prevent propagation, zoom in (to zoom 14, speed 1.5) and update side popup.
+          // On marker click: stop propagation, zoom in (to zoom 14, speed 1.5), and update side popup.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             countryLocked = false;
@@ -345,7 +352,7 @@
          • For other regions, hover is enabled when zoom is ≤ 4.
        - Once a country is clicked, the hover effect is disabled via the countryLocked flag.
        - The mousemove event is throttled (20 ms) for performance.
-       - Additionally, on hover, the side popup displays the country name and flag.
+       - On hover, the side popup displays the country name and its emoji flag.
     */
     map.on("load", function() {
       map.addSource("country-boundaries", {
@@ -405,18 +412,16 @@
           if (map.getZoom() > threshold || countryLocked) {
             map.getCanvas().style.cursor = "";
             map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
-            // Hide country side popup if one is showing.
-            if (!lockedCity) updateSidePopup(null);
+            updateSidePopup(null);
             return;
           }
           map.getCanvas().style.cursor = "pointer";
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", feature.properties.iso_3166_1]);
-          // Update the side popup with country info.
           updateCountrySidePopup(feature);
         } else {
           map.getCanvas().style.cursor = "";
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
-          if (!lockedCity) updateSidePopup(null);
+          updateSidePopup(null);
         }
       }, 20));
       
@@ -425,7 +430,6 @@
         if (e.features.length > 0) {
           const feature = e.features[0];
           let targetFeature = feature;
-          // If the geometry is a MultiPolygon, select the polygon with the largest area.
           if (feature.geometry.type === "MultiPolygon") {
             let maxArea = 0;
             feature.geometry.coordinates.forEach(polygon => {
@@ -447,7 +451,6 @@
           map.fitBounds(bbox, { padding: 20, duration: 500 });
           countryLocked = true;
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
-          // Clear the side popup (so marker popup can later override).
           updateSidePopup(null);
         }
       });
@@ -458,7 +461,7 @@
       countryLocked = false;
     });
     
-    // Ensure that text and labels appear above the country hover layer.
+    // Ensure that map text and labels appear above the country hover layer.
     const layers = map.getStyle().layers;
     let firstSymbolId;
     for (let i = 0; i < layers.length; i++) {
