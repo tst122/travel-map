@@ -126,7 +126,7 @@
   <div id="search-container">
     <input type="text" id="search-box" placeholder="🔍 Search locations...">
   </div>
-  <!-- Side popup (used for marker and country hover popups) -->
+  <!-- Side popup (used for both marker and country hover popups) -->
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
@@ -140,7 +140,7 @@
     }
     
     // Function to update the side popup for country hover.
-    // This version forces the use of the ADMIN property for English names.
+    // This version forces the use of the ADMIN property (English name) only.
     function updateCountrySidePopup(feature) {
       const countryName = feature.properties.ADMIN || "Unknown";
       const iso = (feature.properties.iso_3166_1 || "").toLowerCase();
@@ -476,4 +476,5 @@
   </script>
 </body>
 </html>
+
 
