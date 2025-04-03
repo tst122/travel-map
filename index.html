@@ -250,7 +250,7 @@
           let isOverPopup = false;
           el.addEventListener("mouseenter", () => {
             if (el.dataset.locked === "true") return;
-            // Always allow marker hover effects regardless of country lock.
+            // Allow marker hover regardless of locked country.
             countryLocked = false;
             isOverMarker = true;
             popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
@@ -422,12 +422,16 @@
       }
     });
     
-    // On moveend, if a country is locked, update its side popup.
-    // Otherwise, if zoom < 12 and no country is locked, clear the side popup.
+    // On moveend, if a country is locked check zoom; if zoom < 3.5, clear locked country.
     map.on("moveend", () => {
       const zoom = map.getZoom();
       if (lockedCountry) {
-        updateCountrySidePopup(lockedCountry);
+        if (zoom < 3.5) {
+          lockedCountry = null;
+          updateSidePopup(null);
+        } else {
+          updateCountrySidePopup(lockedCountry);
+        }
         return;
       }
       if (zoom < 12) {
@@ -619,3 +623,4 @@
   </script>
 </body>
 </html>
+
