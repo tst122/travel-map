@@ -221,7 +221,6 @@
           if (!markerData.lat || !markerData.lng) return;
           const el = document.createElement("div");
           el.className = "marker";
-          // (Optional: Keep a data attribute for consistency.)
           el.dataset.locked = "false";
   
           const popupContent = `
@@ -243,7 +242,6 @@
           let isOverMarker = false;
           let isOverPopup = false;
           el.addEventListener("mouseenter", () => {
-            // If not locked by a click, show the pointer popup.
             if (el.dataset.locked === "true") return;
             countryLocked = false;
             isOverMarker = true;
@@ -274,9 +272,7 @@
             e.stopPropagation();
             countryLocked = false;
             updateSidePopup(null);
-            // Remove any pointer popup if visible.
             popup.remove();
-            // Do not lock the pointer popup; simply update the side city popup.
             if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
               map.flyTo({
                 center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
@@ -312,12 +308,57 @@
     
     map.on("zoom", updateMarkerVisibility);
     
+    // Filter markers as you type.
     document.getElementById("search-box").addEventListener("input", function (e) {
       const searchTerm = e.target.value.toLowerCase();
       mapMarkers.forEach(marker => {
         const name = marker.getElement().dataset.name;
         marker.getElement().style.display = (!searchTerm || (name && name.includes(searchTerm))) ? "block" : "none";
       });
+    });
+    
+    // Search on Enter: zoom to marker or country.
+    document.getElementById("search-box").addEventListener("keydown", function(e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const term = this.value.trim().toLowerCase();
+        let foundMarker = null;
+        // Check for marker match.
+        for (const marker of mapMarkers) {
+          const markerName = marker.getElement().dataset.name;
+          if (markerName && markerName.includes(term)) {
+            foundMarker = marker;
+            break;
+          }
+        }
+        if (foundMarker) {
+          const markerData = foundMarker.markerData;
+          map.flyTo({
+            center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+            zoom: 14,
+            speed: 1.5
+          });
+          lockedCity = (markerData.isCity && markerData.isCity.toLowerCase() === "true") ? markerData : null;
+          updateSidePopup(markerData);
+        } else {
+          // If no marker, try to find a matching country.
+          const countryFeatures = map.querySourceFeatures('country-boundaries', { sourceLayer: 'country_boundaries' });
+          let foundCountry = null;
+          for (const feature of countryFeatures) {
+            const admin = (feature.properties.ADMIN || feature.properties.NAME || feature.properties.name_en || "").toLowerCase();
+            if (admin.includes(term)) {
+              foundCountry = feature;
+              break;
+            }
+          }
+          if (foundCountry) {
+            const bbox = turf.bbox(foundCountry);
+            map.fitBounds(bbox, { padding: 20, duration: 500 });
+            countryLocked = true;
+            updateSidePopup(null);
+          }
+        }
+      }
     });
     
     map.on("moveend", () => {
@@ -382,7 +423,7 @@
         },
         filter: ["==", "iso_3166_1", ""]
       });
-      // Country border line layer.
+      // Country border layer.
       map.addLayer({
         id: "country-borders",
         type: "line",
@@ -399,7 +440,7 @@
       
       // Throttled mousemove for country hover.
       map.on("mousemove", throttle(function(e) {
-        if (lockedCity) return; // When a city is clicked, do not update country hover.
+        if (lockedCity) return;
         let threshold = 4;
         const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
         if (features.length > 0) {
