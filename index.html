@@ -35,7 +35,7 @@
       box-shadow: 0 2px 5px rgba(0,0,0,0.3);
       transition: background-color 0.3s ease;
     }
-    /* Hover effect for all markers (overrides any custom color) */
+    /* Hover effect for all markers (overrides any inline color) */
     .marker:hover {
       background-color: #ff5722 !important;
     }
@@ -132,7 +132,7 @@
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
-    // Helper: Convert ISO country code to emoji flag.
+    // Helper: Convert a two-letter ISO country code into an emoji flag.
     function isoToEmoji(isoCode) {
       return isoCode.toUpperCase().split('').map(char => String.fromCodePoint(127397 + char.charCodeAt())).join('');
     }
@@ -370,8 +370,7 @@
       }
     });
     
-    // On moveend, if not locked and zoomed in, update the side popup using the city marker 
-    // that is closest to the center if it is visible within the current map bounds.
+    // On moveend, if no city is locked and zoom is high, update the side popup with the nearest visible city marker.
     map.on("moveend", () => {
       const zoom = map.getZoom();
       if (zoom < 12) {
@@ -454,6 +453,8 @@
       
       // Throttled mousemove for country hover.
       map.on("mousemove", throttle(function(e) {
+        // Disable country hover if zoomed in (>=12).
+        if (map.getZoom() >= 12) return;
         if (lockedCity) return;
         let threshold = 4;
         const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
