@@ -250,7 +250,7 @@
           let isOverPopup = false;
           el.addEventListener("mouseenter", () => {
             if (el.dataset.locked === "true") return;
-            // Allow marker hover regardless of locked country.
+            // Allow marker hover regardless of country lock.
             countryLocked = false;
             isOverMarker = true;
             popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
@@ -283,24 +283,24 @@
             // Clear country hover effects.
             map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
             map.getCanvas().style.cursor = "";
-            updateSidePopup(null);
+            // Immediately update the side popup so it stays visible during zoom.
+            updateSidePopup(markerData);
+            // Remove the pointer popup.
             popup.remove();
             if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
-              map.flyTo({
-                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
-                zoom: 14,
-                speed: 1.5
-              });
               lockedCity = markerData;
-              updateSidePopup(markerData);
-            } else {
               map.flyTo({
                 center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
                 zoom: 14,
                 speed: 1.5
               });
+            } else {
               lockedCity = null;
-              updateSidePopup(markerData);
+              map.flyTo({
+                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+                zoom: 14,
+                speed: 1.5
+              });
             }
           });
   
@@ -422,7 +422,7 @@
       }
     });
     
-    // On moveend, if a country is locked check zoom; if zoom < 3.5, clear locked country.
+    // On moveend, if a country is locked, check zoom; if zoom is below 3.5, clear locked country.
     map.on("moveend", () => {
       const zoom = map.getZoom();
       if (lockedCountry) {
@@ -623,4 +623,3 @@
   </script>
 </body>
 </html>
-
