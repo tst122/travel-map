@@ -128,21 +128,22 @@
   <div id="search-container">
     <input type="text" id="search-box" placeholder="🔍 Search locations...">
   </div>
-  <!-- Side popup (for displaying country or city info) -->
+  <!-- Side popup (for displaying country or mappoint info) -->
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
-    // --- Global Variables ---
-    let popupLocked = false;    // True when a mappoint is clicked or a city popup is triggered.
-    let lockedData = null;      // Stores the locked mappoint or city marker data.
-    let countryLocked = false;  // Used for country click interactions.
-    
-    // --- Helper Functions ---
+    // Global variables for locking the side popup.
+    let lockedCity = null;    // Data for a city marker if clicked or selected.
+    let lockedCountry = null; // Data for a country feature if clicked.
+
+    // Helper: Convert a two-letter ISO country code into an emoji flag.
     function isoToEmoji(isoCode) {
-      return isoCode.toUpperCase().split('').map(char => String.fromCodePoint(127397 + char.charCodeAt())).join('');
+      return isoCode.toUpperCase().split('').map(char => 
+        String.fromCodePoint(127397 + char.charCodeAt())
+      ).join('');
     }
     
-    // Display country info in the side popup.
+    // Function to update the side popup with country info.
     function updateCountrySidePopup(feature) {
       const countryName = feature.properties.ADMIN || feature.properties.NAME || feature.properties.name_en || "Unknown";
       const iso = (feature.properties.iso_3166_1 || "").toLowerCase();
@@ -156,12 +157,14 @@
       sidePopup.style.display = "block";
     }
     
-    // Display marker or city info in the side popup.
+    // Function to update the side popup with mappoint (city) info.
     function updateSidePopup(data) {
       const sidePopup = document.getElementById('side-popup');
       if (data) {
         let content = "";
-        if (!data.popup) { content += `<h3>${data.name}</h3>`; }
+        if (!data.popup) {
+          content += `<h3>${data.name}</h3>`;
+        }
         content += data.popup ? `<div>${data.popup}</div>` : "";
         content += data.link ? `<a href="${data.link}" target="_blank">Explore →</a>` : "";
         sidePopup.innerHTML = content;
@@ -191,7 +194,7 @@
       }
     }
     
-    // --- Map Setup ---
+    // Map setup.
     mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
     const map = new mapboxgl.Map({
       container: 'map',
@@ -203,7 +206,18 @@
     const mapMarkers = [];
     const cityMarkers = [];
     
-    // --- Load Markers from CSV ---
+    // Update marker visibility based on zoom.
+    function updateMarkerVisibility() {
+      const zoom = map.getZoom();
+      mapMarkers.forEach(marker => {
+        const el = marker.getElement();
+        const min = parseFloat(el.dataset.zoomMin);
+        const max = parseFloat(el.dataset.zoomMax);
+        el.style.display = (zoom >= min && zoom <= max) ? "block" : "none";
+      });
+    }
+    
+    // Load markers from CSV.
     Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv", {
       download: true,
       header: true,
@@ -214,7 +228,7 @@
           el.className = "marker";
           el.dataset.locked = "false";
   
-          // Apply custom color if available.
+          // If the CSV has a "color" field, use it.
           if (markerData.color) {
             el.style.backgroundColor = markerData.color;
           }
@@ -224,21 +238,23 @@
             ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:#fff; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ""}
           `;
           const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false })
-                          .setHTML(popupContent);
+            .setHTML(popupContent);
   
           const marker = new mapboxgl.Marker(el)
-                           .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
-                           .addTo(map);
+            .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
+            .addTo(map);
           marker.markerData = markerData;
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             cityMarkers.push(marker);
           }
   
-          // --- Pointer Popup on Hover (only if no popup is locked) ---
+          // Pointer popup behavior on hover.
           let isOverMarker = false;
           let isOverPopup = false;
           el.addEventListener("mouseenter", () => {
-            if (el.dataset.locked === "true" || popupLocked) return;
+            // Only show pointer popup if no marker or country is locked.
+            if (el.dataset.locked === "true") return;
+            if (lockedCity || lockedCountry) return;
             isOverMarker = true;
             popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
             popup.once("open", () => {
@@ -253,7 +269,7 @@
             });
           });
           el.addEventListener("mouseleave", () => {
-            if (el.dataset.locked === "true" || popupLocked) return;
+            if (el.dataset.locked === "true") return;
             isOverMarker = false;
             setTimeout(() => {
               if (!isOverMarker && !isOverPopup && el.dataset.locked !== "true") {
@@ -262,26 +278,35 @@
             }, 100);
           });
   
-          // --- Marker Click: Lock the Popup with this Marker’s Data ---
+          // On marker click: clear any country lock, fly to marker, and update the side popup with mappoint info.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
-            // Clear any country hover effects.
+            // Clear any country popup.
+            lockedCountry = null;
             map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
             map.getCanvas().style.cursor = "";
-            countryLocked = false;
             updateSidePopup(null);
             popup.remove();
-            popupLocked = true;
-            lockedData = markerData;
-            updateSidePopup(markerData);
-            map.flyTo({
-              center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
-              zoom: 14,
-              speed: 1.5
-            });
+            if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
+              map.flyTo({
+                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+                zoom: 14,
+                speed: 1.5
+              });
+              lockedCity = markerData;
+              updateSidePopup(markerData);
+            } else {
+              map.flyTo({
+                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+                zoom: 14,
+                speed: 1.5
+              });
+              lockedCity = null;
+              updateSidePopup(markerData);
+            }
           });
   
-          // --- Set Marker Zoom Visibility ---
+          // Set zoom filtering: non-city markers default to min zoom 12.
           if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
             el.dataset.zoomMin = markerData.zoomMin || 0;
           } else {
@@ -297,8 +322,8 @@
     
     map.on("zoom", updateMarkerVisibility);
     
-    // --- Search Filtering ---
-    document.getElementById("search-box").addEventListener("input", function(e) {
+    // Filter markers as you type.
+    document.getElementById("search-box").addEventListener("input", function (e) {
       const searchTerm = e.target.value.toLowerCase();
       mapMarkers.forEach(marker => {
         const name = marker.getElement().dataset.name;
@@ -306,12 +331,13 @@
       });
     });
     
-    // --- Search on Enter: Zoom to Marker or Country ---
+    // Search on Enter: zoom to marker or country.
     document.getElementById("search-box").addEventListener("keydown", function(e) {
       if (e.key === "Enter") {
         e.preventDefault();
         const term = this.value.trim().toLowerCase();
         let foundMarker = null;
+        // Check for marker match.
         for (const marker of mapMarkers) {
           const markerName = marker.getElement().dataset.name;
           if (markerName && markerName.includes(term)) {
@@ -326,10 +352,11 @@
             zoom: 14,
             speed: 1.5
           });
-          popupLocked = true;
-          lockedData = markerData;
+          lockedCity = (markerData.isCity && markerData.isCity.toLowerCase() === "true") ? markerData : null;
+          lockedCountry = null;
           updateSidePopup(markerData);
         } else {
+          // If no marker, try to find a matching country.
           const countryFeatures = map.querySourceFeatures('country-boundaries', { sourceLayer: 'country_boundaries' });
           let foundCountry = null;
           for (const feature of countryFeatures) {
@@ -342,28 +369,32 @@
           if (foundCountry) {
             const bbox = turf.bbox(foundCountry);
             map.fitBounds(bbox, { padding: 20, duration: 500 });
-            countryLocked = true;
-            updateSidePopup(null);
+            lockedCountry = foundCountry;
+            lockedCity = null;
+            updateCountrySidePopup(foundCountry);
           }
         }
       }
     });
     
-    // --- Map Moveend: Trigger City Popup if No Popup Locked ---
+    // On moveend, if no mappoint is locked, update the side popup.
     map.on("moveend", () => {
       const zoom = map.getZoom();
       if (zoom < 12) {
         updateSidePopup(null);
-        popupLocked = false;
-        lockedData = null;
+        lockedCity = null;
+        lockedCountry = null;
         return;
       }
-      // If already locked from a click or search, do not override.
-      if (popupLocked) {
-        updateSidePopup(lockedData);
+      if (lockedCity) {
+        updateSidePopup(lockedCity);
         return;
       }
-      // Otherwise, find the nearest visible city marker.
+      if (lockedCountry) {
+        updateCountrySidePopup(lockedCountry);
+        return;
+      }
+      // If neither is locked, find the nearest visible city marker.
       const bounds = map.getBounds();
       let closestCity = null;
       let minDist = Infinity;
@@ -381,81 +412,131 @@
         }
       }
       if (closestCity) {
-        popupLocked = true;
-        lockedData = closestCity.markerData;
         updateSidePopup(closestCity.markerData);
       } else {
         updateSidePopup(null);
       }
     });
     
-    // --- Country Hover: Show Country Info if No Popup Locked ---
-    map.on("mousemove", throttle(function(e) {
-      if (popupLocked) return; // Do not override if a marker/city popup is locked.
-      let threshold = 4;
-      const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
-      if (features.length > 0) {
-        const feature = features[0];
-        const naCountries = ["USA", "CAN", "MEX"];
-        if (naCountries.includes(feature.properties.iso_3166_1)) {
-          threshold = 3;
+    /* Add interactive country boundaries. */
+    map.on("load", function() {
+      map.addSource("country-boundaries", {
+        type: "vector",
+        url: "mapbox://mapbox.country-boundaries-v1"
+      });
+      // Invisible fill layer for interaction.
+      map.addLayer({
+        id: "country-fills",
+        type: "fill",
+        source: "country-boundaries",
+        "source-layer": "country_boundaries",
+        layout: {},
+        paint: {
+          "fill-color": "#888888",
+          "fill-opacity": 0
         }
-        if (map.getZoom() > threshold || countryLocked) {
+      });
+      // Hover fill layer.
+      map.addLayer({
+        id: "country-fills-highlight",
+        type: "fill",
+        source: "country-boundaries",
+        "source-layer": "country_boundaries",
+        layout: {},
+        paint: {
+          "fill-color": "rgba(200,200,200,0.3)"
+        },
+        filter: ["==", "iso_3166_1", ""]
+      });
+      // Country border layer.
+      map.addLayer({
+        id: "country-borders",
+        type: "line",
+        source: "country-boundaries",
+        "source-layer": "country_boundaries",
+        layout: {},
+        paint: {
+          "line-color": "#aaa",
+          "line-width": 1
+        }
+      });
+      
+      const naCountries = ["USA", "CAN", "MEX"];
+      
+      // Throttled mousemove for country hover.
+      map.on("mousemove", throttle(function(e) {
+        // Disable country hover if zoomed in or if a city or country is locked.
+        if (map.getZoom() >= 12) return;
+        if (lockedCity || lockedCountry) return;
+        let threshold = 4;
+        const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
+        if (features.length > 0) {
+          const feature = features[0];
+          if (naCountries.includes(feature.properties.iso_3166_1)) {
+            threshold = 3;
+          }
+          if (map.getZoom() > threshold) {
+            map.getCanvas().style.cursor = "";
+            map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
+            updateSidePopup(null);
+            return;
+          }
+          map.getCanvas().style.cursor = "pointer";
+          map.setFilter("country-fills-highlight", ["==", "iso_3166_1", feature.properties.iso_3166_1]);
+          updateCountrySidePopup(feature);
+        } else {
           map.getCanvas().style.cursor = "";
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
           updateSidePopup(null);
-          return;
         }
-        map.getCanvas().style.cursor = "pointer";
-        map.setFilter("country-fills-highlight", ["==", "iso_3166_1", feature.properties.iso_3166_1]);
-        updateCountrySidePopup(feature);
-      } else {
-        map.getCanvas().style.cursor = "";
-        map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
-        updateSidePopup(null);
-      }
-    }, 20));
-    
-    // --- Country Click ---
-    map.on("click", "country-fills", function(e) {
-      if (e.features.length > 0) {
-        const feature = e.features[0];
-        let targetFeature = feature;
-        if (feature.geometry.type === "MultiPolygon") {
-          let maxArea = 0;
-          feature.geometry.coordinates.forEach(polygon => {
-            const polyFeature = {
-              type: "Feature",
-              geometry: { type: "Polygon", coordinates: polygon }
-            };
-            const area = turf.area(polyFeature);
-            if (area > maxArea) {
-              maxArea = area;
-              targetFeature = polyFeature;
-            }
-          });
+      }, 20));
+      
+      // Click on country fills: lock the country popup.
+      map.on("click", "country-fills", function(e) {
+        if (e.features.length > 0) {
+          const feature = e.features[0];
+          let targetFeature = feature;
+          if (feature.geometry.type === "MultiPolygon") {
+            let maxArea = 0;
+            feature.geometry.coordinates.forEach(polygon => {
+              const polyFeature = {
+                type: "Feature",
+                geometry: {
+                  type: "Polygon",
+                  coordinates: polygon
+                }
+              };
+              const area = turf.area(polyFeature);
+              if (area > maxArea) {
+                maxArea = area;
+                targetFeature = polyFeature;
+              }
+            });
+          }
+          const bbox = turf.bbox(targetFeature);
+          map.fitBounds(bbox, { padding: 20, duration: 500 });
+          lockedCountry = feature;
+          lockedCity = null;
+          updateCountrySidePopup(feature);
+          map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
         }
-        const bbox = turf.bbox(targetFeature);
-        map.fitBounds(bbox, { padding: 20, duration: 500 });
-        countryLocked = true;
-        map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
-        updateSidePopup(null);
-      }
+      });
     });
     
-    // --- Clear Popup Lock on Map Click (Background) ---
+    // Reset country lock on clicking empty space.
     map.on("click", function(e) {
-      popupLocked = false;
-      lockedData = null;
-      countryLocked = false;
+      // Only reset if not clicking on a marker.
+      if (!e.originalEvent.target.classList.contains("marker")) {
+        lockedCountry = null;
+      }
     });
     
-    // --- Ensure Country Hover Layer is Above Symbols ---
-    const styleLayers = map.getStyle().layers;
+    // Move country hover layer above symbols.
+    const layers = map.getStyle().layers;
     let firstSymbolId;
-    for (let i = 0; i < styleLayers.length; i++) {
-      if (styleLayers[i].type === "symbol") {
-        firstSymbolId = styleLayers[i].id;
+    for (let i = 0; i < layers.length; i++) {
+      if (layers[i].type === "symbol") {
+        firstSymbolId = layers[i].id;
         break;
       }
     }
@@ -465,5 +546,4 @@
   </script>
 </body>
 </html>
-
 
