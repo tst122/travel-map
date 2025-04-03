@@ -35,8 +35,13 @@
       box-shadow: 0 2px 5px rgba(0,0,0,0.3);
       transition: background-color 0.3s ease;
     }
+    /* Default hover effect for markers without custom color */
     .marker:hover {
       background-color: #ff5722;
+    }
+    /* For markers with a custom color, disable the hover change */
+    .marker.custom:hover {
+      background-color: inherit !important;
     }
     /* Popup content style for marker popups */
     .mapboxgl-popup-content {
@@ -223,6 +228,12 @@
           el.className = "marker";
           el.dataset.locked = "false";
   
+          // If the CSV has a "color" field, use it.
+          if (markerData.color) {
+            el.style.backgroundColor = markerData.color;
+            el.classList.add("custom");
+          }
+  
           const popupContent = `
             ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
             ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:#fff; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ""}
@@ -267,7 +278,7 @@
             }, 100);
           });
   
-          // On click: update the side popup, fly to the marker, and remove hover effects.
+          // On click: clear any hover effects, fly to marker, and update the side popup.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             // Clear country hover effects.
