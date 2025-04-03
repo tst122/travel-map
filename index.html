@@ -267,9 +267,12 @@
             }, 100);
           });
   
-          // On click: update the side popup and fly to the marker's location.
+          // On click: update the side popup, fly to the marker, and remove hover effects.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
+            // Clear country hover effects.
+            map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
+            map.getCanvas().style.cursor = "";
             countryLocked = false;
             updateSidePopup(null);
             popup.remove();
