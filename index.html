@@ -128,22 +128,16 @@
   <div id="search-container">
     <input type="text" id="search-box" placeholder="🔍 Search locations...">
   </div>
-  <!-- Side popup (for displaying country or mappoint info) -->
+  <!-- Side popup (for displaying info after click or zoom) -->
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
-    // Global variables for locking the side popup.
-    let lockedCity = null;    // Data for a city marker if clicked or selected.
-    let lockedCountry = null; // Data for a country feature if clicked.
-
     // Helper: Convert a two-letter ISO country code into an emoji flag.
     function isoToEmoji(isoCode) {
-      return isoCode.toUpperCase().split('').map(char => 
-        String.fromCodePoint(127397 + char.charCodeAt())
-      ).join('');
+      return isoCode.toUpperCase().split('').map(char => String.fromCodePoint(127397 + char.charCodeAt())).join('');
     }
     
-    // Function to update the side popup with country info.
+    // Update side popup with country info.
     function updateCountrySidePopup(feature) {
       const countryName = feature.properties.ADMIN || feature.properties.NAME || feature.properties.name_en || "Unknown";
       const iso = (feature.properties.iso_3166_1 || "").toLowerCase();
@@ -155,23 +149,6 @@
       const sidePopup = document.getElementById('side-popup');
       sidePopup.innerHTML = content;
       sidePopup.style.display = "block";
-    }
-    
-    // Function to update the side popup with mappoint (city) info.
-    function updateSidePopup(data) {
-      const sidePopup = document.getElementById('side-popup');
-      if (data) {
-        let content = "";
-        if (!data.popup) {
-          content += `<h3>${data.name}</h3>`;
-        }
-        content += data.popup ? `<div>${data.popup}</div>` : "";
-        content += data.link ? `<a href="${data.link}" target="_blank">Explore →</a>` : "";
-        sidePopup.innerHTML = content;
-        sidePopup.style.display = "block";
-      } else {
-        sidePopup.style.display = "none";
-      }
     }
     
     // Throttle function.
@@ -205,6 +182,26 @@
     
     const mapMarkers = [];
     const cityMarkers = [];
+    let lockedCity = null;   // Holds city marker data if clicked.
+    let lockedCountry = null; // Holds country feature if clicked.
+    let countryLocked = false; // For country hover.
+    
+    // Update side popup with marker data.
+    function updateSidePopup(data) {
+      const sidePopup = document.getElementById('side-popup');
+      if (data) {
+        let content = "";
+        if (!data.popup) {
+          content += `<h3>${data.name}</h3>`;
+        }
+        content += data.popup ? `<div>${data.popup}</div>` : "";
+        content += data.link ? `<a href="${data.link}" target="_blank">Explore →</a>` : "";
+        sidePopup.innerHTML = content;
+        sidePopup.style.display = "block";
+      } else {
+        sidePopup.style.display = "none";
+      }
+    }
     
     // Update marker visibility based on zoom.
     function updateMarkerVisibility() {
@@ -252,9 +249,8 @@
           let isOverMarker = false;
           let isOverPopup = false;
           el.addEventListener("mouseenter", () => {
-            // Only show pointer popup if no marker or country is locked.
             if (el.dataset.locked === "true") return;
-            if (lockedCity || lockedCountry) return;
+            countryLocked = false;
             isOverMarker = true;
             popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
             popup.once("open", () => {
@@ -278,13 +274,14 @@
             }, 100);
           });
   
-          // On marker click: clear any country lock, fly to marker, and update the side popup with mappoint info.
+          // On click for marker: clear hover effects, fly to marker, and update side popup.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
-            // Clear any country popup.
-            lockedCountry = null;
+            // Clear country hover effects.
             map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
             map.getCanvas().style.cursor = "";
+            countryLocked = false;
+            lockedCountry = null; // Clear any locked country.
             updateSidePopup(null);
             popup.remove();
             if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
@@ -356,7 +353,7 @@
           lockedCountry = null;
           updateSidePopup(markerData);
         } else {
-          // If no marker, try to find a matching country.
+          // If no marker match, try to find a matching country.
           const countryFeatures = map.querySourceFeatures('country-boundaries', { sourceLayer: 'country_boundaries' });
           let foundCountry = null;
           for (const feature of countryFeatures) {
@@ -369,6 +366,7 @@
           if (foundCountry) {
             const bbox = turf.bbox(foundCountry);
             map.fitBounds(bbox, { padding: 20, duration: 500 });
+            countryLocked = true;
             lockedCountry = foundCountry;
             lockedCity = null;
             updateCountrySidePopup(foundCountry);
@@ -377,7 +375,7 @@
       }
     });
     
-    // On moveend, if no mappoint is locked, update the side popup.
+    // On moveend, if no marker or country is locked, update the side popup with the nearest visible city marker.
     map.on("moveend", () => {
       const zoom = map.getZoom();
       if (zoom < 12) {
@@ -394,13 +392,13 @@
         updateCountrySidePopup(lockedCountry);
         return;
       }
-      // If neither is locked, find the nearest visible city marker.
       const bounds = map.getBounds();
       let closestCity = null;
       let minDist = Infinity;
       const canvasCenter = { x: map.getCanvas().width / 2, y: map.getCanvas().height / 2 };
       for (let i = 0; i < cityMarkers.length; i++) {
         const marker = cityMarkers[i];
+        // Only consider markers that are within the current bounds.
         if (!bounds.contains(marker.getLngLat())) continue;
         const screenPos = map.project(marker.getLngLat());
         const dx = screenPos.x - canvasCenter.x;
@@ -465,9 +463,10 @@
       
       // Throttled mousemove for country hover.
       map.on("mousemove", throttle(function(e) {
-        // Disable country hover if zoomed in or if a city or country is locked.
+        // Disable country hover if zoomed in or if a country is locked.
         if (map.getZoom() >= 12) return;
-        if (lockedCity || lockedCountry) return;
+        if (lockedCountry) return;
+        if (lockedCity) return;
         let threshold = 4;
         const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
         if (features.length > 0) {
@@ -475,7 +474,7 @@
           if (naCountries.includes(feature.properties.iso_3166_1)) {
             threshold = 3;
           }
-          if (map.getZoom() > threshold) {
+          if (map.getZoom() > threshold || countryLocked) {
             map.getCanvas().style.cursor = "";
             map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
             updateSidePopup(null);
@@ -491,7 +490,7 @@
         }
       }, 20));
       
-      // Click on country fills: lock the country popup.
+      // On click for country fills: lock the country and update the side popup.
       map.on("click", "country-fills", function(e) {
         if (e.features.length > 0) {
           const feature = e.features[0];
@@ -515,20 +514,19 @@
           }
           const bbox = turf.bbox(targetFeature);
           map.fitBounds(bbox, { padding: 20, duration: 500 });
+          countryLocked = true;
           lockedCountry = feature;
           lockedCity = null;
-          updateCountrySidePopup(feature);
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
+          updateCountrySidePopup(feature);
         }
       });
     });
     
-    // Reset country lock on clicking empty space.
+    // Reset countryLocked and lockedCountry on a general map click.
     map.on("click", function(e) {
-      // Only reset if not clicking on a marker.
-      if (!e.originalEvent.target.classList.contains("marker")) {
-        lockedCountry = null;
-      }
+      countryLocked = false;
+      lockedCountry = null;
     });
     
     // Move country hover layer above symbols.
