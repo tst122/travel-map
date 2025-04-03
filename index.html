@@ -130,7 +130,7 @@
   <div id="side-popup"></div>
   <div id="map"></div>
   <script>
-    // Throttle function to limit execution frequency (used for mousemove on country fills).
+    // Throttle function to limit the frequency of execution (used for country hover updates).
     function throttle(func, limit) {
       let lastFunc;
       let lastRan;
@@ -152,12 +152,12 @@
       }
     }
     
-    // Use your original Mapbox style and access token.
+    // Set initial zoom to 2.
     mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/sicko5/cm6k1juil010301qm2krq7o84',
-      center: [-34.252704, 41.402275],
+      center: [-30, 40], // Example center between Europe and North America
       zoom: 2
     });
     
@@ -195,7 +195,7 @@
       });
     }
     
-    // Load markers from CSV using PapaParse.
+    // Load CSV markers via PapaParse.
     Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv", {
       download: true,
       header: true,
@@ -244,7 +244,7 @@
               }
             }, 100); // 100 ms delay for responsiveness.
           });
-          // On marker click: stop propagation so country clicks aren't triggered, zoom in (zoom 14, speed 1.5) and update side popup.
+          // On marker click: stop propagation so country clicks aren't triggered, zoom in (to zoom 14, speed 1.5) and update side popup.
           el.addEventListener("click", (e) => {
             e.stopPropagation();
             countryLocked = false;
@@ -323,7 +323,7 @@
     });
     
     /* Add interactive country boundaries using fill layers.
-       - Hover effect is enabled when zoom is at or below a threshold:
+       - Hover effect is enabled only when zoom is at or below a threshold:
          • For North America (ISO: USA, CAN, MEX), hover is enabled when zoom is ≤ 3.
          • For other regions, hover is enabled when zoom is ≤ 4.
        - Once a country is clicked, the hover effect is disabled via the countryLocked flag.
@@ -426,28 +426,25 @@
           map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
         }
       });
-      
-      // Reset countryLocked when clicking on empty space or a marker.
-      map.on("click", function(e) {
-        countryLocked = false;
-      });
-      
-      // IMPORTANT: Move the country hover layer ("country-fills-highlight")
-      // below the symbol layers so that any text or labels appear above it.
-      const layers = map.getStyle().layers;
-      let firstSymbolId;
-      for (let i = 0; i < layers.length; i++) {
-        if (layers[i].type === "symbol") {
-          firstSymbolId = layers[i].id;
-          break;
-        }
-      }
-      if (firstSymbolId) {
-        map.moveLayer("country-fills-highlight", firstSymbolId);
-      }
     });
+    
+    // Reset countryLocked when clicking on empty space or a marker.
+    map.on("click", function(e) {
+      countryLocked = false;
+    });
+    
+    // Ensure that text and labels appear above the country hover layer.
+    const layers = map.getStyle().layers;
+    let firstSymbolId;
+    for (let i = 0; i < layers.length; i++) {
+      if (layers[i].type === "symbol") {
+        firstSymbolId = layers[i].id;
+        break;
+      }
+    }
+    if (firstSymbolId) {
+      map.moveLayer("country-fills-highlight", firstSymbolId);
+    }
   </script>
 </body>
 </html>
-
-
