@@ -423,7 +423,7 @@
       }
     });
     
-    // On moveend, if a country is locked, update its side popup and do not override.
+    // On moveend, if a country is locked, update its side popup.
     map.on("moveend", () => {
       const zoom = map.getZoom();
       if (lockedCountry) {
@@ -509,6 +509,7 @@
       
       // Throttled mousemove for country hover.
       map.on("mousemove", throttle(function(e) {
+        // Disable country hover if zoomed in (>=12) or if a country is locked.
         if (map.getZoom() >= 12) return;
         if (lockedCountry) return;
         let threshold = 4;
@@ -589,6 +590,8 @@
             bbox = turf.bbox(targetFeature);
           }
           map.fitBounds(bbox, { padding: 20, duration: 500 });
+          // Clear the country highlight so the hover color does not persist.
+          map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
           lockedCountry = feature;
           lockedCity = null;
           updateCountrySidePopup(feature);
@@ -616,4 +619,5 @@
   </script>
 </body>
 </html>
+
 
