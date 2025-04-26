@@ -468,6 +468,14 @@
     
     /* Add interactive country boundaries. */
     map.on("load", function() {
+      // deep-link support: read #zoom/lat/lng from URL and jump there
+      const parts = window.location.hash.slice(1).split("/");
+      if (parts.length === 3) {
+        const [z, lat, lng] = parts.map(Number);
+        if (!isNaN(z) && !isNaN(lat) && !isNaN(lng)) {
+          map.jumpTo({ center: [lng, lat], zoom: z });
+        }
+      }
       map.addSource("country-boundaries", {
         type: "vector",
         url: "mapbox://mapbox.country-boundaries-v1"
