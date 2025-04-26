@@ -189,13 +189,16 @@
     }
     
     // Map setup.
-    mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
-    const map = new mapboxgl.Map({
-      container: 'map',
-      style: 'mapbox://styles/sicko5/cm6k1juil010301qm2krq7o84',
-      center: [-30, 40],
-      zoom: 2
-    });
+  const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/sicko5/cm6k1juil010301qm2krq7o84',
+  // hash:true tells Mapbox to parse #<zoom>/<lat>/<lng> from the URL:
+  hash: true,
+  // you can leave a default start-view if you like:
+  center: [-30, 40],
+  zoom: 2
+});
+
     
     const mapMarkers = [];
     const cityMarkers = [];
