@@ -24,6 +24,7 @@
       bottom: 0;
       width: 100%;
     }
+    /* Marker style with hover effect */
     .marker {
       background-color: #5a6bff;
       width: 16px;
@@ -34,9 +35,11 @@
       box-shadow: 0 2px 5px rgba(0,0,0,0.3);
       transition: background-color 0.3s ease;
     }
+    /* Hover effect for all markers (overrides any inline color) */
     .marker:hover {
       background-color: #ff5722 !important;
     }
+    /* Popup content style for marker popups */
     .mapboxgl-popup-content {
       padding: 15px;
       border-radius: 8px;
@@ -55,6 +58,7 @@
       margin: 0;
       font-size: 14px;
     }
+    /* Search container style */
     #search-container {
       position: absolute;
       top: 20px;
@@ -83,6 +87,7 @@
     #search-box:focus {
       box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
     }
+    /* Enhanced side popup style */
     #side-popup {
       position: absolute;
       top: 20px;
@@ -123,76 +128,67 @@
   <div id="search-container">
     <input type="text" id="search-box" placeholder="🔍 Search locations...">
   </div>
+  <!-- Side popup (for displaying city or country info) -->
   <div id="side-popup"></div>
   <div id="map"></div>
-
   <script>
-    // 1) read optional "?city=Name" query-string
-    function getQueryParam(name) {
-      const params = new URLSearchParams(window.location.search);
-      return params.get(name);
-    }
-    const cityParam = getQueryParam('city')?.toLowerCase();
-
-    // helper: country-code → emoji
+    // Helper: Convert a two-letter ISO country code into an emoji flag.
     function isoToEmoji(isoCode) {
-      return isoCode.toUpperCase()
-        .split('')
-        .map(c => String.fromCodePoint(127397 + c.charCodeAt()))
-        .join('');
+      return isoCode.toUpperCase().split('').map(char => String.fromCodePoint(127397 + char.charCodeAt())).join('');
     }
-
+    
+    // Update side popup for a locked country.
     function updateCountrySidePopup(feature) {
-      const countryName = feature.properties.ADMIN || feature.properties.NAME || "Unknown";
+      const countryName = feature.properties.ADMIN || feature.properties.NAME || feature.properties.name_en || "Unknown";
       const iso = (feature.properties.iso_3166_1 || "").toUpperCase();
-      const emoji = iso ? isoToEmoji(iso) : "";
-      const content = `
-        <div style="display:flex; align-items:center;">
-          <span style="font-size:32px; margin-right:10px;">${emoji}</span>
-          <span style="font-size:20px; font-weight:600; color:#0077ff;">${countryName}</span>
-        </div>`;
-      const sp = document.getElementById('side-popup');
-      sp.innerHTML = content;
-      sp.style.display = "block";
+      const emojiFlag = iso ? isoToEmoji(iso) : "";
+      const content = `<div style="display:flex; align-items:center;">
+                         <span style="font-size:32px; margin-right:10px;">${emojiFlag}</span>
+                         <span style="font-size:20px; font-weight:600; color:#0077ff;">${countryName}</span>
+                       </div>`;
+      const sidePopup = document.getElementById('side-popup');
+      sidePopup.innerHTML = content;
+      sidePopup.style.display = "block";
     }
-
+    
+    // Update side popup for marker (city) info.
     function updateSidePopup(data) {
-      const sp = document.getElementById('side-popup');
-      if (!data) {
-        sp.style.display = "none";
-        return;
-      }
-      let html = '';
-      if (!data.popup) {
-        html += `<h3>${data.name}</h3>`;
-      }
-      if (data.popup) {
-        html += `<div>${data.popup}</div>`;
-      }
-      if (data.link) {
-        html += `<a href="${data.link}" target="_blank">Explore →</a>`;
-      }
-      sp.innerHTML = html;
-      sp.style.display = "block";
-    }
-
-    function throttle(fn, limit) {
-      let last, timer;
-      return function(...args) {
-        const now = Date.now();
-        if (!last || now - last >= limit) {
-          fn.apply(this, args);
-          last = now;
-        } else {
-          clearTimeout(timer);
-          timer = setTimeout(() => {
-            fn.apply(this, args);
-            last = Date.now();
-          }, limit - (now - last));
+      const sidePopup = document.getElementById('side-popup');
+      if (data) {
+        let content = "";
+        if (!data.popup) {
+          content += `<h3>${data.name}</h3>`;
         }
-      };
+        content += data.popup ? `<div>${data.popup}</div>` : "";
+        content += data.link ? `<a href="${data.link}" target="_blank">Explore →</a>` : "";
+        sidePopup.innerHTML = content;
+        sidePopup.style.display = "block";
+      } else {
+        sidePopup.style.display = "none";
+      }
     }
-
+    
+    // Throttle function.
+    function throttle(func, limit) {
+      let lastFunc, lastRan;
+      return function() {
+        const context = this, args = arguments;
+        if (!lastRan) {
+          func.apply(context, args);
+          lastRan = Date.now();
+        } else {
+          clearTimeout(lastFunc);
+          lastFunc = setTimeout(function() {
+            if ((Date.now() - lastRan) >= limit) {
+              func.apply(context, args);
+              lastRan = Date.now();
+            }
+          }, limit - (Date.now() - lastRan));
+        }
+      }
+    }
+    
+    // Map setup.
     mapboxgl.accessToken = 'pk.eyJ1Ijoic2lja281IiwiYSI6ImNtNXNvNDlqcDBvcngyanE2OW9jYjEwYXMifQ.jCPdU-0lcRGjtDpaxoICsw';
     const map = new mapboxgl.Map({
       container: 'map',
@@ -200,129 +196,245 @@
       center: [-30, 40],
       zoom: 2
     });
-
+    
     const mapMarkers = [];
     const cityMarkers = [];
-    let lockedCountry = null;
-    let lockedCity = null;
-    let countryLocked = false;
-
+    let lockedCity = null;    // Holds city marker data if clicked.
+    let lockedCountry = null; // Holds country feature if clicked.
+    let countryLocked = false; // For country hover.
+    
+    // Update marker visibility based on zoom.
     function updateMarkerVisibility() {
-      const z = map.getZoom();
-      mapMarkers.forEach(m => {
-        const el = m.getElement();
+      const zoom = map.getZoom();
+      mapMarkers.forEach(marker => {
+        const el = marker.getElement();
         const min = parseFloat(el.dataset.zoomMin);
         const max = parseFloat(el.dataset.zoomMax);
-        el.style.display = (z >= min && z <= max) ? 'block' : 'none';
+        el.style.display = (zoom >= min && zoom <= max) ? "block" : "none";
       });
     }
-
+    
+    // Load markers from CSV.
     Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vR-zg6jI431F1q5MKA927NjE5yZvZPLngBoyd0wmV93vyMSPOYsJMdSXJ1oWDkBZbiesDk6AlkUzR3M/pub?gid=0&single=true&output=csv", {
       download: true,
       header: true,
       complete: function(results) {
-        results.data.forEach(d => {
-          if (!d.lat || !d.lng) return;
-          const el = document.createElement('div');
-          el.className = 'marker';
-          el.dataset.locked = 'false';
-          if (d.color) el.style.backgroundColor = d.color;
-          el.dataset.name = (d.name||'').toLowerCase();
-          el.dataset.zoomMin = (d.isCity?.toLowerCase()==='true' ? (d.zoomMin||0) : (d.zoomMin||12));
-          el.dataset.zoomMax = d.zoomMax||20;
-
-          const popupHTML = `
-            ${d.popup ? `<div>${d.popup}</div>` : `<h3>${d.name}</h3>`}
-            ${d.link ? `<p style="margin-top:10px;"><a href="${d.link}" target="_blank" style="padding:8px 14px;background:#0077ff;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">Explore →</a></p>` : ''}
+        results.data.forEach(markerData => {
+          if (!markerData.lat || !markerData.lng) return;
+          const el = document.createElement("div");
+          el.className = "marker";
+          el.dataset.locked = "false";
+  
+          // If the CSV has a "color" field, use it.
+          if (markerData.color) {
+            el.style.backgroundColor = markerData.color;
+          }
+  
+          const popupContent = `
+            ${markerData.popup ? `<div>${markerData.popup}</div>` : `<h3>${markerData.name}</h3>`}
+            ${markerData.link ? `<p style="margin-top:10px;"><a href="${markerData.link}" target="_blank" style="display:inline-block; padding:8px 14px; background:#0077ff; color:#fff; border-radius:6px; text-decoration:none; font-weight:bold;">Explore →</a></p>` : ""}
           `;
-          const popup = new mapboxgl.Popup({ offset:25, closeOnClick:false, closeButton:false })
-            .setHTML(popupHTML);
-
+          const popup = new mapboxgl.Popup({ offset: 25, closeOnClick: false, closeButton: false })
+            .setHTML(popupContent);
+  
           const marker = new mapboxgl.Marker(el)
-            .setLngLat([parseFloat(d.lng), parseFloat(d.lat)])
+            .setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)])
             .addTo(map);
-          marker.markerData = d;
-          mapMarkers.push(marker);
-          if (d.isCity?.toLowerCase()==='true') cityMarkers.push(marker);
-
-          // hover / click handlers...
-          el.addEventListener('mouseenter', () => {
-            if (el.dataset.locked==='true') return;
+          marker.markerData = markerData;
+          if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
+            cityMarkers.push(marker);
+          }
+  
+          // Pointer popup behavior on hover.
+          let isOverMarker = false;
+          let isOverPopup = false;
+          el.addEventListener("mouseenter", () => {
+            if (el.dataset.locked === "true") return;
+            // Allow marker hover regardless of country lock.
             countryLocked = false;
-            popup.setLngLat([parseFloat(d.lng), parseFloat(d.lat)]).addTo(map);
+            isOverMarker = true;
+            popup.setLngLat([parseFloat(markerData.lng), parseFloat(markerData.lat)]).addTo(map);
+            popup.once("open", () => {
+              const popupEl = popup.getElement();
+              if (popupEl) {
+                popupEl.addEventListener("mouseenter", () => { isOverPopup = true; });
+                popupEl.addEventListener("mouseleave", () => {
+                  isOverPopup = false;
+                  if (!isOverMarker && el.dataset.locked !== "true") popup.remove();
+                });
+              }
+            });
           });
-          el.addEventListener('mouseleave', () => {
-            if (el.dataset.locked==='true') return;
-            setTimeout(() => { if (el.dataset.locked==='false') popup.remove(); }, 100);
+          el.addEventListener("mouseleave", () => {
+            if (el.dataset.locked === "true") return;
+            isOverMarker = false;
+            setTimeout(() => {
+              if (!isOverMarker && !isOverPopup && el.dataset.locked !== "true") {
+                popup.remove();
+              }
+            }, 100);
           });
-          el.addEventListener('click', e => {
+  
+          // On marker click: clear any country lock, fly to marker, and update side popup.
+          el.addEventListener("click", (e) => {
             e.stopPropagation();
             lockedCountry = null;
-            map.setFilter('country-fills-highlight', ['==','iso_3166_1','']);
-            map.getCanvas().style.cursor = '';
-            updateSidePopup(d);
+            countryLocked = false;
+            // Clear country hover effects.
+            map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
+            map.getCanvas().style.cursor = "";
+            // Immediately update the side popup so it stays visible during zoom.
+            updateSidePopup(markerData);
+            // Remove the pointer popup.
             popup.remove();
-            lockedCity = d.isCity?.toLowerCase()==='true' ? d : null;
-            map.flyTo({
-              center: [parseFloat(d.lng), parseFloat(d.lat)],
-              zoom: 14,
-              speed: 1.5
-            });
+            if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
+              lockedCity = markerData;
+              map.flyTo({
+                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+                zoom: 14,
+                speed: 1.5
+              });
+            } else {
+              lockedCity = null;
+              map.flyTo({
+                center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+                zoom: 14,
+                speed: 1.5
+              });
+            }
           });
+  
+          // Set zoom filtering: non-city markers default to min zoom 12.
+          if (markerData.isCity && markerData.isCity.toLowerCase() === "true") {
+            el.dataset.zoomMin = markerData.zoomMin || 0;
+          } else {
+            el.dataset.zoomMin = markerData.zoomMin || 12;
+          }
+          el.dataset.zoomMax = markerData.zoomMax || 20;
+          el.dataset.name = (markerData.name || "").toLowerCase();
+          mapMarkers.push(marker);
         });
-
-        // 2) after we've added all markers, adjust visibility & optionally fly to cityParam
         updateMarkerVisibility();
-
-        if (cityParam) {
-          const target = mapMarkers.find(m => m.markerData.name.toLowerCase() === cityParam);
-          if (target) {
-            const td = target.markerData;
-            map.flyTo({
-              center: [parseFloat(td.lng), parseFloat(td.lat)],
-              zoom: 14,
-              speed: 1.5
-            });
-            updateSidePopup(td);
+      }
+    });
+    
+    map.on("zoom", updateMarkerVisibility);
+    
+    // Filter markers as you type.
+    document.getElementById("search-box").addEventListener("input", function (e) {
+      const searchTerm = e.target.value.toLowerCase();
+      mapMarkers.forEach(marker => {
+        const name = marker.getElement().dataset.name;
+        marker.getElement().style.display = (!searchTerm || (name && name.includes(searchTerm))) ? "block" : "none";
+      });
+    });
+    
+    // Search on Enter: zoom to marker or country.
+    document.getElementById("search-box").addEventListener("keydown", function(e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const term = this.value.trim().toLowerCase();
+        let foundMarker = null;
+        for (const marker of mapMarkers) {
+          const markerName = marker.getElement().dataset.name;
+          if (markerName && markerName.includes(term)) {
+            foundMarker = marker;
+            break;
+          }
+        }
+        if (foundMarker) {
+          const markerData = foundMarker.markerData;
+          lockedCountry = null;
+          map.flyTo({
+            center: [parseFloat(markerData.lng), parseFloat(markerData.lat)],
+            zoom: 14,
+            speed: 1.5
+          });
+          lockedCity = (markerData.isCity && markerData.isCity.toLowerCase() === "true") ? markerData : null;
+          updateSidePopup(markerData);
+        } else {
+          const countryFeatures = map.querySourceFeatures('country-boundaries', { sourceLayer: 'country_boundaries' });
+          let foundCountry = null;
+          for (const feature of countryFeatures) {
+            const admin = (feature.properties.ADMIN || feature.properties.NAME || feature.properties.name_en || "").toLowerCase();
+            if (admin.includes(term)) {
+              foundCountry = feature;
+              break;
+            }
+          }
+          if (foundCountry) {
+            lockedCountry = foundCountry;
+            // Special handling for Canada.
+            let bbox;
+            if (foundCountry.properties.iso_3166_1 === "CAN") {
+              let combinedBbox;
+              let found = false;
+              foundCountry.geometry.coordinates.forEach(polygon => {
+                const polyFeature = {
+                  type: "Feature",
+                  geometry: {
+                    type: "Polygon",
+                    coordinates: polygon
+                  }
+                };
+                const centroid = turf.centroid(polyFeature);
+                if (centroid.geometry.coordinates[1] < 60) {
+                  found = true;
+                  const polyBbox = turf.bbox(polyFeature);
+                  if (!combinedBbox) {
+                    combinedBbox = polyBbox;
+                  } else {
+                    combinedBbox = [
+                      Math.min(combinedBbox[0], polyBbox[0]),
+                      Math.min(combinedBbox[1], polyBbox[1]),
+                      Math.max(combinedBbox[2], polyBbox[2]),
+                      Math.max(combinedBbox[3], polyBbox[3])
+                    ];
+                  }
+                }
+              });
+              bbox = found ? combinedBbox : turf.bbox(foundCountry);
+            } else {
+              let targetFeature = foundCountry;
+              if (foundCountry.geometry.type === "MultiPolygon") {
+                let maxArea = 0;
+                foundCountry.geometry.coordinates.forEach(polygon => {
+                  const polyFeature = {
+                    type: "Feature",
+                    geometry: {
+                      type: "Polygon",
+                      coordinates: polygon
+                    }
+                  };
+                  const area = turf.area(polyFeature);
+                  if (area > maxArea) {
+                    maxArea = area;
+                    targetFeature = polyFeature;
+                  }
+                });
+              }
+              bbox = turf.bbox(targetFeature);
+            }
+            map.fitBounds(bbox, { padding: 20, duration: 500 });
+            updateCountrySidePopup(foundCountry);
           }
         }
       }
     });
-
-    map.on('zoom', updateMarkerVisibility);
-
-    document.getElementById('search-box').addEventListener('input', e => {
-      const term = e.target.value.toLowerCase();
-      mapMarkers.forEach(m => {
-        const el = m.getElement();
-        el.style.display = !term || el.dataset.name.includes(term) ? 'block' : 'none';
-      });
-    });
-
-    document.getElementById('search-box').addEventListener('keydown', e => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const term = e.target.value.trim().toLowerCase();
-        let found = mapMarkers.find(m => m.markerData.name.toLowerCase().includes(term));
-        if (found) {
-          const d = found.markerData;
-          lockedCountry = null;
-          map.flyTo({ center:[parseFloat(d.lng), parseFloat(d.lat)], zoom:14, speed:1.5 });
-          updateSidePopup(d);
-        } else {
-          // fallback country search...
-        }
-      }
-    });
-
-    map.on('moveend', () => {
-      const z = map.getZoom();
+    
+    // On moveend, if a country is locked, check zoom; if zoom is below 3.5, clear locked country.
+    map.on("moveend", () => {
+      const zoom = map.getZoom();
       if (lockedCountry) {
-        if (z < 3.5) { lockedCountry = null; updateSidePopup(null); }
-        else updateCountrySidePopup(lockedCountry);
+        if (zoom < 3.5) {
+          lockedCountry = null;
+          updateSidePopup(null);
+        } else {
+          updateCountrySidePopup(lockedCountry);
+        }
         return;
       }
-      if (z < 12) {
+      if (zoom < 12) {
         updateSidePopup(null);
         lockedCity = null;
         return;
@@ -331,122 +443,182 @@
         updateSidePopup(lockedCity);
         return;
       }
-      // auto-center city popup...
       const bounds = map.getBounds();
-      const centerPt = { x: map.getCanvas().width/2, y: map.getCanvas().height/2 };
-      let closest = null, minDist = Infinity;
-      cityMarkers.forEach(m => {
-        if (!bounds.contains(m.getLngLat())) return;
-        const p = map.project(m.getLngLat());
-        const d2 = (p.x-centerPt.x)**2 + (p.y-centerPt.y)**2;
-        if (d2 < minDist) { minDist = d2; closest = m; }
-      });
-      if (closest) updateSidePopup(closest.markerData);
-      else updateSidePopup(null);
-    });
-
-    map.on('load', () => {
-      map.addSource('country-boundaries', {
-        type: 'vector',
-        url: 'mapbox://mapbox.country-boundaries-v1'
-      });
-      map.addLayer({
-        id: 'country-fills',
-        type: 'fill',
-        source: 'country-boundaries',
-        'source-layer': 'country_boundaries',
-        paint: { 'fill-opacity': 0 }
-      });
-      map.addLayer({
-        id: 'country-fills-highlight',
-        type: 'fill',
-        source: 'country-boundaries',
-        'source-layer': 'country_boundaries',
-        paint: { 'fill-color': 'rgba(200,200,200,0.3)' },
-        filter: ['==','iso_3166_1','']
-      });
-      map.addLayer({
-        id: 'country-borders',
-        type: 'line',
-        source: 'country-boundaries',
-        'source-layer': 'country_boundaries',
-        paint: { 'line-color': '#aaa', 'line-width': 1 }
-      });
-
-      const northAm = ['USA','CAN','MEX'];
-      map.on('mousemove', throttle(e => {
-        if (map.getZoom()>=12 || lockedCountry) return;
-        const feats = map.queryRenderedFeatures(e.point, { layers:['country-fills'] });
-        if (!feats.length) {
-          map.getCanvas().style.cursor='';
-          map.setFilter('country-fills-highlight',['==','iso_3166_1','']);
-          updateSidePopup(null);
-          return;
+      let closestCity = null;
+      let minDist = Infinity;
+      const canvasCenter = { x: map.getCanvas().width / 2, y: map.getCanvas().height / 2 };
+      for (let i = 0; i < cityMarkers.length; i++) {
+        const marker = cityMarkers[i];
+        if (!bounds.contains(marker.getLngLat())) continue;
+        const screenPos = map.project(marker.getLngLat());
+        const dx = screenPos.x - canvasCenter.x;
+        const dy = screenPos.y - canvasCenter.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < minDist) {
+          minDist = dist;
+          closestCity = marker;
         }
-        const f = feats[0], iso = f.properties.iso_3166_1;
-        const thresh = northAm.includes(iso)?3:4;
-        if (map.getZoom()>thresh) {
-          map.getCanvas().style.cursor='';
-          map.setFilter('country-fills-highlight',['==','iso_3166_1','']);
-          updateSidePopup(null);
+      }
+      if (closestCity) {
+        updateSidePopup(closestCity.markerData);
+      } else {
+        updateSidePopup(null);
+      }
+    });
+    
+    /* Add interactive country boundaries. */
+    map.on("load", function() {
+      map.addSource("country-boundaries", {
+        type: "vector",
+        url: "mapbox://mapbox.country-boundaries-v1"
+      });
+      // Invisible fill layer for interaction.
+      map.addLayer({
+        id: "country-fills",
+        type: "fill",
+        source: "country-boundaries",
+        "source-layer": "country_boundaries",
+        layout: {},
+        paint: {
+          "fill-color": "#888888",
+          "fill-opacity": 0
+        }
+      });
+      // Hover fill layer.
+      map.addLayer({
+        id: "country-fills-highlight",
+        type: "fill",
+        source: "country-boundaries",
+        "source-layer": "country_boundaries",
+        layout: {},
+        paint: {
+          "fill-color": "rgba(200,200,200,0.3)"
+        },
+        filter: ["==", "iso_3166_1", ""]
+      });
+      // Country border layer.
+      map.addLayer({
+        id: "country-borders",
+        type: "line",
+        source: "country-boundaries",
+        "source-layer": "country_boundaries",
+        layout: {},
+        paint: {
+          "line-color": "#aaa",
+          "line-width": 1
+        }
+      });
+      
+      const naCountries = ["USA", "CAN", "MEX"];
+      
+      // Throttled mousemove for country hover.
+      map.on("mousemove", throttle(function(e) {
+        // Disable country hover if zoomed in (>=12) or if a country is locked.
+        if (map.getZoom() >= 12) return;
+        if (lockedCountry) return;
+        let threshold = 4;
+        const features = map.queryRenderedFeatures(e.point, { layers: ["country-fills"] });
+        if (features.length > 0) {
+          const feature = features[0];
+          if (naCountries.includes(feature.properties.iso_3166_1)) {
+            threshold = 3;
+          }
+          if (map.getZoom() > threshold || countryLocked) {
+            map.getCanvas().style.cursor = "";
+            map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
+            updateSidePopup(null);
+            return;
+          }
+          map.getCanvas().style.cursor = "pointer";
+          map.setFilter("country-fills-highlight", ["==", "iso_3166_1", feature.properties.iso_3166_1]);
+          updateCountrySidePopup(feature);
         } else {
-          map.getCanvas().style.cursor='pointer';
-          map.setFilter('country-fills-highlight',['==','iso_3166_1',iso]);
-          updateCountrySidePopup(f);
+          map.getCanvas().style.cursor = "";
+          map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
+          updateSidePopup(null);
         }
       }, 20));
-
-      map.on('click','country-fills', e => {
-        const f = e.features[0];
-        let bbox;
-        if (f.properties.iso_3166_1==='CAN') {
-          let combined, found=false;
-          f.geometry.coordinates.forEach(poly => {
-            const feat={type:'Feature',geometry:{type:'Polygon',coordinates:poly}};
-            const cent = turf.centroid(feat);
-            if (cent.geometry.coordinates[1]<60) {
-              found=true;
-              const bb = turf.bbox(feat);
-              combined = combined
-                ? [
-                    Math.min(combined[0],bb[0]),
-                    Math.min(combined[1],bb[1]),
-                    Math.max(combined[2],bb[2]),
-                    Math.max(combined[3],bb[3])
-                  ]
-                : bb;
-            }
-          });
-          bbox = found?combined:turf.bbox(f);
-        } else {
-          let tgt = f;
-          if (f.geometry.type==='MultiPolygon') {
-            let maxA=0;
-            f.geometry.coordinates.forEach(poly => {
-              const feat={type:'Feature',geometry:{type:'Polygon',coordinates:poly}};
-              const a = turf.area(feat);
-              if (a>maxA){maxA=a; tgt=feat;}
+      
+      // Click on country fills.
+      map.on("click", "country-fills", function(e) {
+        if (e.features.length > 0) {
+          const feature = e.features[0];
+          let bbox;
+          if (feature.properties.iso_3166_1 === "CAN") {
+            let combinedBbox;
+            let found = false;
+            feature.geometry.coordinates.forEach(polygon => {
+              const polyFeature = {
+                type: "Feature",
+                geometry: {
+                  type: "Polygon",
+                  coordinates: polygon
+                }
+              };
+              const centroid = turf.centroid(polyFeature);
+              if (centroid.geometry.coordinates[1] < 60) {
+                found = true;
+                const polyBbox = turf.bbox(polyFeature);
+                if (!combinedBbox) {
+                  combinedBbox = polyBbox;
+                } else {
+                  combinedBbox = [
+                    Math.min(combinedBbox[0], polyBbox[0]),
+                    Math.min(combinedBbox[1], polyBbox[1]),
+                    Math.max(combinedBbox[2], polyBbox[2]),
+                    Math.max(combinedBbox[3], polyBbox[3])
+                  ];
+                }
+              }
             });
+            bbox = found ? combinedBbox : turf.bbox(feature);
+          } else {
+            let targetFeature = feature;
+            if (feature.geometry.type === "MultiPolygon") {
+              let maxArea = 0;
+              feature.geometry.coordinates.forEach(polygon => {
+                const polyFeature = {
+                  type: "Feature",
+                  geometry: {
+                    type: "Polygon",
+                    coordinates: polygon
+                  }
+                };
+                const area = turf.area(polyFeature);
+                if (area > maxArea) {
+                  maxArea = area;
+                  targetFeature = polyFeature;
+                }
+              });
+            }
+            bbox = turf.bbox(targetFeature);
           }
-          bbox = turf.bbox(tgt);
+          map.fitBounds(bbox, { padding: 20, duration: 500 });
+          // Clear the country highlight so the hover color does not persist.
+          map.setFilter("country-fills-highlight", ["==", "iso_3166_1", ""]);
+          lockedCountry = feature;
+          lockedCity = null;
+          updateCountrySidePopup(feature);
         }
-        map.fitBounds(bbox, { padding:20, duration:500 });
-        map.setFilter('country-fills-highlight',['==','iso_3166_1','']);
-        lockedCountry = f;
-        lockedCity = null;
-        updateCountrySidePopup(f);
       });
     });
-
-    map.on('click', () => { countryLocked = false; });
-
-    // ensure country highlight sits below symbols
+    
+    // Reset countryLocked on click.
+    map.on("click", function(e) {
+      countryLocked = false;
+    });
+    
+    // Move country hover layer above symbols.
     const layers = map.getStyle().layers;
-    for (let l of layers) {
-      if (l.type==='symbol') {
-        map.moveLayer('country-fills-highlight', l.id);
+    let firstSymbolId;
+    for (let i = 0; i < layers.length; i++) {
+      if (layers[i].type === "symbol") {
+        firstSymbolId = layers[i].id;
         break;
       }
+    }
+    if (firstSymbolId) {
+      map.moveLayer("country-fills-highlight", firstSymbolId);
     }
   </script>
 </body>
